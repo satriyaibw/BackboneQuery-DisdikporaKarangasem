@@ -39,3 +39,9 @@ def test_invalid_dialect_raises(monkeypatch):
     with pytest.raises(MissingConfigError) as e:
         load_settings()
     assert "DB_DIALECT" in str(e.value)
+
+def test_non_numeric_db_port_raises_friendly_error(monkeypatch):
+    _set(monkeypatch, {**BASE_ENV, "DB_PORT": "abc"})
+    with pytest.raises(MissingConfigError) as e:
+        load_settings()
+    assert "DB_PORT" in str(e.value)

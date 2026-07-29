@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, URL
 
 from .base import DatabaseAdapter
 
@@ -11,11 +11,13 @@ class SqlServerAdapter(DatabaseAdapter):
         super().__init__(settings)
         s = settings
         self._engine = create_engine(
-            f"mssql+pymssql://{s.db_user}:{s.db_password}@{s.db_host}:{s.db_port}/{s.db_name}",
+            URL.create("mssql+pymssql", username=s.db_user, password=s.db_password,
+                       host=s.db_host, port=s.db_port, database=s.db_name),
             pool_size=10, max_overflow=10,
         )
         self._master = create_engine(
-            f"mssql+pymssql://{s.db_user}:{s.db_password}@{s.db_host}:{s.db_port}/master",
+            URL.create("mssql+pymssql", username=s.db_user, password=s.db_password,
+                       host=s.db_host, port=s.db_port, database="master"),
             pool_size=1, max_overflow=0,
         )
 
@@ -99,9 +101,8 @@ class SqlServerAdapter(DatabaseAdapter):
         update_set = ", ".join(f"t.[{c}] = s.[{c}]" for c in non_pk)
         insert_cols = ", ".join(f"[{c}]" for c in cols)
         insert_vals = ", ".join(f"s.[{c}]" for c in cols)
-        changed = " OR ".join(f"t.[{c}] <> s.[{c}]" for c in non_pk) or "1=0"
         matched_clause = (
-            f"WHEN MATCHED AND ({changed})\n        THEN UPDATE SET {update_set}\n"
+            f"WHEN MATCHED\n        THEN UPDATE SET {update_set}\n"
             if non_pk else ""
         )
         return (

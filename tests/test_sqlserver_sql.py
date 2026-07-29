@@ -7,6 +7,14 @@ def _adapter():
                         db_auto_create_database=True, db_maintenance_db="master")
     return SqlServerAdapter(s)
 
+def test_dsn_url_encodes_special_char_password():
+    s = SimpleNamespace(db_host="h", db_port=1433, db_user="u",
+                        db_password="p@ss:w/rd%x", db_name="db",
+                        db_auto_create_database=True, db_maintenance_db="master")
+    a = SqlServerAdapter(s)
+    assert a._engine.url.password == "p@ss:w/rd%x"
+    assert a._engine.url.database == "db"
+
 def test_col_type_nvarchar_bounded():
     a = _adapter()
     assert a.build_col_type({"type_name": "nvarchar", "type_length": 50}) == "NVARCHAR(50)"
@@ -35,6 +43,13 @@ def test_upsert_sql_is_merge():
     assert ":p0 AS [npsn]" in sql
     assert "t.[npsn] = s.[npsn]" in sql
     assert "UPDATE SET t.[nama] = s.[nama]" in sql
+
+def test_upsert_sql_has_no_null_unsafe_change_guard():
+    a = _adapter()
+    cols = ["npsn", "nama"]
+    col_to_param = {"npsn": "p0", "nama": "p1"}
+    sql = a.build_upsert_sql("sekolah", cols, ["npsn"], "dbo", col_to_param)
+    assert "WHEN MATCHED AND" not in sql
 
 def test_create_table_sql_has_guard_and_pk():
     a = _adapter()

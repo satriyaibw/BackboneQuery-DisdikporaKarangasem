@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, URL
 
 from .base import DatabaseAdapter
 
@@ -11,11 +11,13 @@ class PostgresAdapter(DatabaseAdapter):
         super().__init__(settings)
         s = settings
         self._engine = create_engine(
-            f"postgresql+psycopg2://{s.db_user}:{s.db_password}@{s.db_host}:{s.db_port}/{s.db_name}",
+            URL.create("postgresql+psycopg2", username=s.db_user, password=s.db_password,
+                       host=s.db_host, port=s.db_port, database=s.db_name),
             pool_size=10, max_overflow=10,
         )
         self._maint = create_engine(
-            f"postgresql+psycopg2://{s.db_user}:{s.db_password}@{s.db_host}:{s.db_port}/{s.db_maintenance_db}",
+            URL.create("postgresql+psycopg2", username=s.db_user, password=s.db_password,
+                       host=s.db_host, port=s.db_port, database=s.db_maintenance_db),
             pool_size=1, max_overflow=0,
         )
 

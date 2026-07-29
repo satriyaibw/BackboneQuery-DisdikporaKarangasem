@@ -7,6 +7,14 @@ def _adapter():
                         db_auto_create_database=True, db_maintenance_db="postgres")
     return PostgresAdapter(s)
 
+def test_dsn_url_encodes_special_char_password():
+    s = SimpleNamespace(db_host="h", db_port=5432, db_user="u",
+                        db_password="p@ss:w/rd%x", db_name="db",
+                        db_auto_create_database=True, db_maintenance_db="postgres")
+    a = PostgresAdapter(s)
+    assert a._engine.url.password == "p@ss:w/rd%x"
+    assert a._engine.url.database == "db"
+
 def test_col_type_mapping():
     a = _adapter()
     assert a.build_col_type({"type_name": "nvarchar", "type_length": 50}) == "varchar(50)"

@@ -1,4 +1,3 @@
-import asyncio
 from datetime import datetime
 from typing import Dict, List
 
@@ -34,6 +33,7 @@ async def create_request():
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(f"{api.base_url}/user-info/request",
                                 headers=api.headers) as resp:
+            resp.raise_for_status()
             body = await resp.json()
             data = body.get("data", {})
             if "keterangan" in data:

@@ -20,6 +20,16 @@ def _bool(name: str, default: bool) -> bool:
     return val.strip().lower() in ("1", "true", "yes", "y", "on")
 
 
+def _int(name: str, default) -> int:
+    val = os.getenv(name)
+    if val is None or val == "":
+        val = default
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        raise MissingConfigError(f"{name} harus berupa angka, bukan '{val}'")
+
+
 @dataclass
 class Settings:
     db_dialect: str
@@ -67,7 +77,7 @@ def load_settings() -> Settings:
     return Settings(
         db_dialect=dialect,
         db_host=required["DB_HOST"],
-        db_port=int(os.getenv("DB_PORT") or default_port),
+        db_port=_int("DB_PORT", default_port),
         db_user=required["DB_USER"],
         db_password=required["DB_PASSWORD"],
         db_name=required["DB_NAME"],
@@ -76,7 +86,7 @@ def load_settings() -> Settings:
         backbone_base_url=os.getenv("BACKBONE_BASE_URL") or DEFAULT_BASE_URL,
         backbone_api_key=required["BACKBONE_API_KEY"],
         backbone_service_jwt=required["BACKBONE_SERVICE_JWT"],
-        backbone_per_page=int(os.getenv("BACKBONE_PER_PAGE") or 500),
+        backbone_per_page=_int("BACKBONE_PER_PAGE", 500),
         schedule_cron=os.getenv("SCHEDULE_CRON") or "0 2 * * *",
         schedule_timezone=os.getenv("SCHEDULE_TIMEZONE") or "Asia/Jakarta",
         deployment_name=os.getenv("DEPLOYMENT_NAME") or "backbone-client-pull",
