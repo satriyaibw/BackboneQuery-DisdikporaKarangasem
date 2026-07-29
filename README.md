@@ -172,6 +172,8 @@ docker compose logs -f prefect-server   # (opsional) pantau proses startup
 
 > Prasyarat: Docker + Docker Compose terpasang di mesin server. Server ini terpisah dari database **tujuan penarikan** (SQL Server/PostgreSQL milik client) — PostgreSQL di `docker-compose.yml` hanya untuk metadata Prefect.
 
+**Retensi log Prefect Server:** semua *flow run*/*task run*/log yang tampil di Prefect UI tersimpan di database metadata ini (tabel internal Prefect, terpisah dari `sync.pull_log` — lihat §8) — **ini bukan tabel yang sama dengan `sync.pull_log`.** `docker-compose.yml` sudah mengaktifkan pembersihan otomatisnya (`PREFECT_SERVER_SERVICES_DB_VACUUM_ENABLED=events,flow_runs`, retensi ~60 hari via `PREFECT_SERVER_SERVICES_DB_VACUUM_RETENTION_PERIOD`) — konsisten dengan `PULL_LOG_RETENTION_DAYS` di §8. Tanpa ini, Prefect Server **tidak membersihkan flow run/log secara default** dan akan terus bertambah.
+
 ### 6.2 Arahkan penarikan ke server
 
 Di `.env`, aktifkan `PREFECT_API_URL` dengan endpoint API server:
