@@ -63,6 +63,7 @@ class Settings:
     schedule_timezone: str
     deployment_name: str
     pull_ref: bool
+    pull_log_retention_days: int
 
 
 def load_settings() -> Settings:
@@ -111,4 +112,5 @@ def load_settings() -> Settings:
         schedule_timezone=os.getenv("SCHEDULE_TIMEZONE") or "Asia/Jakarta",
         deployment_name=os.getenv("DEPLOYMENT_NAME") or "backbone-client-pull",
         pull_ref=_bool("PULL_REF", False),
+        pull_log_retention_days=_int("PULL_LOG_RETENTION_DAYS", 60),
     )
