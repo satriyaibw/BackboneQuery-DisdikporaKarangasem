@@ -37,19 +37,32 @@ class BackboneAPI:
         return token
 
     async def get(self, session: aiohttp.ClientSession, path: str,
-                  params: dict = None) -> dict:
+                  params: dict = None, logger=None, label: Optional[str] = None) -> dict:
         if self.rate_limiter is not None:
             await self.rate_limiter.acquire()
         url = f"{self.base_url}{path}"
         async with session.get(url, params=params, headers=self.headers) as resp:
             resp.raise_for_status()
-            return await resp.json()
+            body = await resp.json()
+        if logger is not None:
+            logger.info(self._describe_access(path, resp.status, body, label))
+        return body
+
+    @staticmethod
+    def _describe_access(path: str, status: int, body: dict, label: Optional[str]) -> str:
+        tag = f" [{label}]" if label else ""
+        data = body.get("data") if isinstance(body, dict) else None
+        count_txt = f"{len(data)} baris" if isinstance(data, list) else "?"
+        page_txt = ""
+        if isinstance(body, dict) and "page" in body and "total_pages" in body:
+            page_txt = f", hal {body['page']}/{body['total_pages']}"
+        return f"GET {path}{tag} → {status} ({count_txt}{page_txt})"
 
     async def get_with_retry(self, session, path, params, label, logger,
                              max_retries: int = 3) -> Optional[dict]:
         for attempt in range(max_retries):
             try:
-                return await self.get(session, path, params)
+                return await self.get(session, path, params, logger=logger, label=label)
             except Exception as e:  # noqa: BLE001
                 if attempt < max_retries - 1:
                     wait = 5 * (3 ** attempt)  # 5s -> 15s
