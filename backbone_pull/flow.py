@@ -10,6 +10,7 @@ from .api import BackboneAPI
 from .config import load_settings
 from .db import get_adapter
 from .puller import pull_paginated
+from .request_info import pick_active_request
 from .routing import route_tables
 from .throttle import RateLimiter
 
@@ -51,20 +52,52 @@ def prepare_infrastructure():
     logger.info("Infrastruktur siap.")
 
 
+async def _read_error_detail(resp) -> str:
+    """Ekstrak pesan error dari body respons gagal ({"detail": ...} atau {"data": {"keterangan": ...}})."""
+    try:
+        body = await resp.json()
+    except Exception:  # noqa: BLE001
+        return f"HTTP {resp.status}"
+    if isinstance(body, dict):
+        if "detail" in body:
+            return str(body["detail"])
+        data = body.get("data")
+        if isinstance(data, dict) and "keterangan" in data:
+            return str(data["keterangan"])
+    return f"HTTP {resp.status}: {body}"
+
+
 @task(name="backbone-create-request", log_prints=True, retries=2, retry_delay_seconds=10)
 async def create_request():
+    """Buat request akses baru; bila gagal (mis. bukan jadwal akses hari ini,
+    atau request sudah pernah dibuat), pakai request aktif yang sudah ada —
+    dibaca lewat GET /user-info/request — selama belum kedaluwarsa."""
     logger = get_run_logger()
     timeout = aiohttp.ClientTimeout(total=30)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(f"{api.base_url}/user-info/request",
                                 headers=api.headers) as resp:
-            resp.raise_for_status()
-            body = await resp.json()
-            data = body.get("data", {})
-            if "keterangan" in data:
-                raise RuntimeError(f"Gagal buat request: {data['keterangan']}")
-            logger.info(f"Request aktif hingga: {data.get('expired_date')}")
-            return data
+            if resp.status < 400:
+                body = await resp.json()
+                data = body.get("data", {})
+                if "keterangan" in data:
+                    raise RuntimeError(f"Gagal buat request: {data['keterangan']}")
+                logger.info(f"Request baru dibuat, aktif hingga: {data.get('expired_date')}")
+                return data
+            create_err = await _read_error_detail(resp)
+
+        logger.warning(f"Gagal buat request baru ({create_err}) — cek request aktif yang sudah ada...")
+        async with session.get(f"{api.base_url}/user-info/request",
+                               headers=api.headers) as info_resp:
+            info_resp.raise_for_status()
+            info_body = await info_resp.json()
+
+    active = pick_active_request(info_body.get("data", []), datetime.now())
+    if active:
+        logger.info(f"Memakai request aktif yang sudah ada, berlaku s/d {active.get('expired_date')}")
+        return active
+
+    raise RuntimeError(f"Tidak ada request akses aktif dan gagal membuat baru: {create_err}")
 
 
 @task(name="backbone-get-metadata", log_prints=True, retries=2, retry_delay_seconds=5)
