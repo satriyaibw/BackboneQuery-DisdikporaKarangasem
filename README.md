@@ -153,6 +153,25 @@ Cek status/log dengan `systemctl status backbone-client-pull` dan `journalctl -u
 
 Cek/atur ulang service kapan saja dengan `nssm edit BackboneClientPull`; hapus dengan `nssm remove BackboneClientPull confirm`.
 
+**Mengecek log di Windows:** secara bawaan, NSSM **membuang** output (stdout/stderr) proses yang dibungkusnya — beda dengan systemd di Linux yang otomatis masuk `journalctl`. Aktifkan redirect ke file log (di PowerShell, sebagai Administrator):
+
+```powershell
+nssm set BackboneClientPull AppStdout C:\path\ke\project\logs\stdout.log
+nssm set BackboneClientPull AppStderr C:\path\ke\project\logs\stderr.log
+nssm set BackboneClientPull AppRotateFiles 1
+nssm set BackboneClientPull AppRotateOnline 1
+nssm set BackboneClientPull AppRotateBytes 10485760
+nssm restart BackboneClientPull
+```
+
+Lalu pantau log realtime dengan:
+
+```powershell
+Get-Content -Wait -Tail 50 C:\path\ke\project\logs\stdout.log
+```
+
+Alternatif yang **tidak tergantung OS** untuk cek aktivitas penarikan — dan lebih ringkas — adalah query langsung ke tabel `sync.pull_log` dan `sync.pull_failures` (lihat §8), yang bekerja sama persis di Windows maupun Linux.
+
 ## 6. Menampilkan di Prefect UI (opsional)
 
 Secara default, `uv run python main.py` berjalan dalam mode **Prefect `serve` ringan** tanpa server terpisah — cukup untuk penarikan terjadwal, tetapi tanpa dashboard. Jika Anda ingin memantau lewat **Prefect UI** (riwayat *run*, log realtime, status jadwal, dan *Quick run* manual), jalankan **Prefect Server self-hosted** lalu arahkan proses `serve` ke server tersebut. **Logika penarikan tidak berubah** — cukup satu variabel `PREFECT_API_URL`.
