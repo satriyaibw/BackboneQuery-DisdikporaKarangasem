@@ -8,6 +8,8 @@ load_dotenv()
 import argparse  # noqa: E402
 import asyncio  # noqa: E402
 
+from prefect.schedules import Cron  # noqa: E402
+
 from backbone_pull.config import load_settings  # noqa: E402
 from backbone_pull.flow import backbone_client_pull  # noqa: E402
 
@@ -27,8 +29,7 @@ def main():
     s = load_settings()
     backbone_client_pull.serve(
         name=s.deployment_name,
-        cron=s.schedule_cron,
-        timezone=s.schedule_timezone,
+        schedule=Cron(s.schedule_cron, timezone=s.schedule_timezone),
     )
 
 
