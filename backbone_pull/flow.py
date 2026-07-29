@@ -19,6 +19,14 @@ db = get_adapter(settings)
 PER_PAGE = settings.backbone_per_page
 
 
+def assert_complete(n_failures: int):
+    """Gagalkan run bila masih ada item yang belum lengkap (dead-letter)."""
+    if n_failures:
+        raise RuntimeError(
+            f"Penarikan tidak lengkap: {n_failures} item masih gagal — lihat tabel "
+            "sync.pull_failures. Item ini akan dicoba lagi otomatis di run berikutnya.")
+
+
 @task(name="backbone-get-token", log_prints=True, retries=2, retry_delay_seconds=10)
 async def get_access_token():
     """Tukar username/password → access-token, dipakai untuk semua request run ini."""
@@ -201,6 +209,40 @@ async def pull_ref(tbl_name: str, meta: dict):
     logger.info(f"{tbl_name}: {res.received} baris diproses")
 
 
+@task(name="backbone-retry-failed", log_prints=True)
+async def retry_failed(tables: Dict[str, dict]):
+    """Coba ulang item di dead-letter — full pull (tanpa filter last_update) agar lengkap."""
+    logger = get_run_logger()
+    failures = db.list_failures()
+    if not failures:
+        return
+    logger.info(f"Retry {len(failures)} item gagal (full pull, tanpa filter incremental)...")
+    timeout = aiohttp.ClientTimeout(total=60)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        for f in failures:
+            tbl, pt, ent = f["tbl_name"], f["param_type"], f["entity_id"]
+            meta = tables.get(tbl)
+            if not meta:
+                continue
+            if pt == "npsn":
+                path, base = "/data/by-npsn", {"npsn": ent, "tbl_name": tbl}
+            elif pt == "wilayah":
+                path, base = "/data/by-wilayah", {"tbl_name": tbl, "kode_wilayah": ent}
+            elif pt == "ref":
+                path, base = "/referensi", {"ref": tbl}
+            else:
+                continue
+            res = await pull_paginated(
+                api, db, session, path, base, tbl, meta, logger,
+                last_update=None, per_page=PER_PAGE, collect=(tbl == "sekolah"))
+            if res.ok:
+                db.clear_failure(tbl, pt, ent)
+                logger.info(f"  pulih: {tbl}/{pt}/{ent} ({res.received} baris)")
+            else:
+                db.record_failure(tbl, pt, ent, res.reason, res.detail,
+                                  res.expected, res.received)
+
+
 @flow(name="backbone-client-pull", log_prints=True)
 async def backbone_client_pull():
     logger = get_run_logger()
@@ -236,4 +278,7 @@ async def backbone_client_pull():
         for tbl_name, meta in tbl_ref.items():
             logger.info(f"Tarik (ref) → [{meta['schema_name']}].[{tbl_name}]")
             await pull_ref(tbl_name, meta)
-    logger.info(f"✓ Selesai — {datetime.now():%Y-%m-%d %H:%M}")
+    await retry_failed(tables)
+    n_failures = db.count_failures()
+    assert_complete(n_failures)
+    logger.info(f"✓ Selesai — 100% lengkap — {datetime.now():%Y-%m-%d %H:%M}")
