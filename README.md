@@ -10,8 +10,7 @@ Proyek Sync Client mandiri untuk menarik data dari **Backbone API** (Kemendikdas
 4. [Konfigurasi `.env`](#4-konfigurasi-env)
 5. [Menjalankan sebagai Service](#5-menjalankan-sebagai-service)
 6. [Menampilkan di Prefect UI (opsional)](#6-menampilkan-di-prefect-ui-opsional)
-7. [⚠️ Keamanan — Rotasi Kredensial](#7-️-keamanan--rotasi-kredensial)
-8. [Troubleshooting](#8-troubleshooting)
+7. [Troubleshooting](#7-troubleshooting)
 
 ---
 
@@ -188,16 +187,7 @@ Deployment `backbone-client-pull` beserta seluruh *flow run*, *task run*, log, d
 >
 > **Alternatif Prefect Cloud:** daripada server self-hosted, Anda bisa memakai [Prefect Cloud](https://app.prefect.cloud) — jalankan `uv run prefect cloud login`, atau isi `PREFECT_API_URL` (URL API workspace Cloud) dan `PREFECT_API_KEY` di `.env`. Metadata *run* akan terkirim ke Cloud — pertimbangkan kebijakan data sebelum memakainya.
 
-## 7. ⚠️ Keamanan — Rotasi Kredensial
-
-> **Peringatan penting sebelum membagikan atau memindahkan proyek ini ke pihak lain (client, repo baru, dsb.):**
-
-- Proyek ini diporting dari implementasi lama yang **sudah pernah meng-commit** kredensial asli (Backbone **service JWT**, **API key**, dan **password database**) ke histori git repo lama. Kredensial tersebut **harus dianggap bocor** dan **wajib dirotasi** (diganti nilainya di sisi Backbone/DB) sebelum repo/histori tersebut dibagikan ke pihak manapun.
-- Proyek standalone ini (`backbone-client-pull`) tidak berisi nilai kredensial asli di dalam kode maupun histori commit-nya — kredensial hanya diisi lewat file `.env` lokal di masing-masing client.
-- **`.env` tidak boleh pernah di-commit ke git** (sudah didaftarkan di `.gitignore`). Selalu gunakan `.env.example` sebagai template dan isi `.env` secara lokal/manual di server client.
-- Perlakukan `.env` seperti file rahasia: batasi hak akses baca (mis. `chmod 600 .env` di Linux), jangan kirim lewat chat/email tanpa enkripsi, dan simpan salinan cadangan kredensial di pengelola secret (password manager/vault), bukan di dalam repo.
-
-## 8. Troubleshooting
+## 7. Troubleshooting
 
 - **Gagal membuat database otomatis / error hak akses (`CREATE DATABASE`)**
   Saat `DB_AUTO_CREATE_DATABASE=true` (default), aplikasi mencoba membuat database `DB_NAME` jika belum ada — ini butuh user DB dengan hak `CREATE DATABASE` di server. Jika user tidak punya hak tersebut, ada dua opsi:
