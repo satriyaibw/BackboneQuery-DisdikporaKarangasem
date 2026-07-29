@@ -8,6 +8,7 @@ from prefect.logging import get_run_logger
 from .api import BackboneAPI
 from .config import load_settings
 from .db import get_adapter
+from .puller import pull_paginated
 from .routing import route_tables
 
 settings = load_settings()
@@ -34,6 +35,7 @@ def prepare_infrastructure():
     logger.info(f"Cek / buat database [{settings.db_name}]...")
     db.ensure_database()
     db.ensure_checkpoint_table()
+    db.ensure_failures_table()
     logger.info("Infrastruktur siap.")
 
 
@@ -106,37 +108,26 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict) -> List[str]:
         npsn_list = []
     logger.info(f"Sekolah: {len(npsn_list)} NPSN dari target DB")
 
-    all_rows: List[dict] = []
+    total = 0
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         for kode in kode_wilayah_list:
-            page = 1
-            while True:
-                params = {"tbl_name": "sekolah", "kode_wilayah": kode,
-                          "page": page, "per_page": PER_PAGE}
-                if last_update:
-                    params["last_update"] = last_update
-                try:
-                    result = await api.get(session, "/data/by-wilayah", params)
-                except Exception as e:
-                    logger.warning(f"Sekolah wilayah {kode} hal {page} gagal: {e}")
-                    break
-                data = result.get("data", [])
-                if api.is_sp_error(data):
-                    logger.warning(f"SP error wilayah {kode}: {data[0]['keterangan']}")
-                    break
-                all_rows.extend(data)
-                if page >= result.get("total_pages", 1):
-                    break
-                page += 1
+            res = await pull_paginated(
+                api, db, session, "/data/by-wilayah",
+                {"tbl_name": "sekolah", "kode_wilayah": kode},
+                "sekolah", meta, logger, last_update, PER_PAGE, collect=True)
+            total += res.received
+            if res.ok:
+                db.clear_failure("sekolah", "wilayah", kode)
+            else:
+                logger.warning(f"Sekolah wilayah {kode}: {res.reason} — {res.detail}")
+                db.record_failure("sekolah", "wilayah", kode, res.reason,
+                                  res.detail, res.expected, res.received)
+            npsn_list += [r["npsn"] for r in res.rows if r.get("npsn")]
 
-    if all_rows:
-        count = db.upsert_rows("sekolah", all_rows, meta)
+    if total:
         db.set_last_update("sekolah", datetime.now())
-        db.add_checkpoint_count("sekolah", count)
-        logger.info(f"Sekolah: {count} baris diupdate dari API")
-        api_npsn = [r["npsn"] for r in all_rows if r.get("npsn")]
-        npsn_list = list(dict.fromkeys(npsn_list + api_npsn))
+        db.add_checkpoint_count("sekolah", total)
     npsn_list = list(dict.fromkeys(npsn_list))
     logger.info(f"Sekolah: {len(npsn_list)} NPSN total")
     return npsn_list
@@ -146,99 +137,68 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict) -> List[str]:
 async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict):
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
-    total_rows = 0
+    total = 0
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         for npsn in npsn_list:
-            page = 1
-            while True:
-                params = {"npsn": npsn, "tbl_name": tbl_name,
-                          "page": page, "per_page": PER_PAGE}
-                if last_update:
-                    params["last_update"] = last_update
-                result = await api.get_with_retry(
-                    session, "/data/by-npsn", params,
-                    f"{tbl_name}/{npsn} hal {page}", logger)
-                if result is None:
-                    break
-                data = result.get("data", [])
-                if api.is_sp_error(data):
-                    logger.debug(f"SP: {data[0]['keterangan']} ({tbl_name}/{npsn})")
-                    break
-                if data:
-                    total_rows += db.upsert_rows(tbl_name, data, meta)
-                if page >= result.get("total_pages", 1):
-                    break
-                page += 1
-    if total_rows:
+            res = await pull_paginated(
+                api, db, session, "/data/by-npsn",
+                {"npsn": npsn, "tbl_name": tbl_name},
+                tbl_name, meta, logger, last_update, PER_PAGE)
+            total += res.received
+            if res.ok:
+                db.clear_failure(tbl_name, "npsn", npsn)
+            else:
+                db.record_failure(tbl_name, "npsn", npsn, res.reason,
+                                  res.detail, res.expected, res.received)
+    if total:
         db.set_last_update(tbl_name, datetime.now())
-        db.add_checkpoint_count(tbl_name, total_rows)
-    logger.info(f"{tbl_name}: {total_rows} baris diproses")
+        db.add_checkpoint_count(tbl_name, total)
+    logger.info(f"{tbl_name}: {total} baris diproses")
 
 
 @task(name="backbone-pull-wilayah", log_prints=True, retries=2, retry_delay_seconds=10)
 async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dict):
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
-    total_rows = 0
+    total = 0
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         for kode in kode_wilayah_list:
-            page = 1
-            while True:
-                params = {"tbl_name": tbl_name, "kode_wilayah": kode,
-                          "page": page, "per_page": PER_PAGE}
-                if last_update:
-                    params["last_update"] = last_update
-                result = await api.get_with_retry(
-                    session, "/data/by-wilayah", params,
-                    f"{tbl_name}/{kode} hal {page}", logger)
-                if result is None:
-                    break
-                data = result.get("data", [])
-                if api.is_sp_error(data):
-                    logger.debug(f"SP: {data[0]['keterangan']} ({tbl_name}/{kode})")
-                    break
-                if data:
-                    total_rows += db.upsert_rows(tbl_name, data, meta)
-                if page >= result.get("total_pages", 1):
-                    break
-                page += 1
-    if total_rows:
+            res = await pull_paginated(
+                api, db, session, "/data/by-wilayah",
+                {"tbl_name": tbl_name, "kode_wilayah": kode},
+                tbl_name, meta, logger, last_update, PER_PAGE)
+            total += res.received
+            if res.ok:
+                db.clear_failure(tbl_name, "wilayah", kode)
+            else:
+                db.record_failure(tbl_name, "wilayah", kode, res.reason,
+                                  res.detail, res.expected, res.received)
+    if total:
         db.set_last_update(tbl_name, datetime.now())
-        db.add_checkpoint_count(tbl_name, total_rows)
-    logger.info(f"{tbl_name}: {total_rows} baris diproses")
+        db.add_checkpoint_count(tbl_name, total)
+    logger.info(f"{tbl_name}: {total} baris diproses")
 
 
 @task(name="backbone-pull-ref", log_prints=True, retries=2, retry_delay_seconds=10)
 async def pull_ref(tbl_name: str, meta: dict):
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
-    total_rows = 0
-    page = 1
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        while True:
-            params = {"ref": tbl_name, "page": page, "per_page": PER_PAGE}
-            if last_update:
-                params["last_update"] = last_update
-            result = await api.get_with_retry(
-                session, "/referensi", params, f"{tbl_name} hal {page}", logger)
-            if result is None:
-                break
-            data = result.get("data", [])
-            if api.is_sp_error(data):
-                logger.debug(f"SP: {data[0]['keterangan']} ({tbl_name})")
-                break
-            if data:
-                total_rows += db.upsert_rows(tbl_name, data, meta)
-            if page >= result.get("total_pages", 1):
-                break
-            page += 1
-    if total_rows:
+        res = await pull_paginated(
+            api, db, session, "/referensi", {"ref": tbl_name},
+            tbl_name, meta, logger, last_update, PER_PAGE)
+    if res.ok:
+        db.clear_failure(tbl_name, "ref", "")
+    else:
+        db.record_failure(tbl_name, "ref", "", res.reason,
+                          res.detail, res.expected, res.received)
+    if res.received:
         db.set_last_update(tbl_name, datetime.now())
-        db.add_checkpoint_count(tbl_name, total_rows)
-    logger.info(f"{tbl_name}: {total_rows} baris diproses")
+        db.add_checkpoint_count(tbl_name, res.received)
+    logger.info(f"{tbl_name}: {res.received} baris diproses")
 
 
 @flow(name="backbone-client-pull", log_prints=True)
