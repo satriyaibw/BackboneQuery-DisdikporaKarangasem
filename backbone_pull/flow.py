@@ -49,6 +49,10 @@ def prepare_infrastructure():
     db.ensure_database()
     db.ensure_checkpoint_table()
     db.ensure_failures_table()
+    db.ensure_pull_log_table()
+    purged = db.purge_old_pull_log(settings.pull_log_retention_days)
+    if purged:
+        logger.info(f"Log aktivitas lama dihapus: {purged} baris (retensi {settings.pull_log_retention_days} hari).")
     logger.info("Infrastruktur siap.")
 
 
@@ -156,14 +160,16 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict) -> List[str]:
         npsn_list = []
     logger.info(f"Sekolah: {len(npsn_list)} NPSN dari target DB")
 
+    started_at = datetime.now()
     sem = asyncio.Semaphore(CONCURRENCY)
     write_lock = asyncio.Lock()
     total = 0
+    failed = 0
     collected: List[str] = []
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async def _one(kode):
-            nonlocal total
+            nonlocal total, failed
             async with sem:
                 res = await pull_paginated(
                     api, db, session, "/data/by-wilayah",
@@ -175,6 +181,7 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict) -> List[str]:
                     if res.ok:
                         await asyncio.to_thread(db.clear_failure, "sekolah", "wilayah", kode)
                     else:
+                        failed += 1
                         logger.warning(f"Sekolah wilayah {kode}: {res.reason} — {res.detail}")
                         await asyncio.to_thread(db.record_failure, "sekolah", "wilayah", kode,
                                                 res.reason, res.detail, res.expected, res.received)
@@ -185,6 +192,8 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict) -> List[str]:
     if total:
         db.set_last_update("sekolah", datetime.now())
         db.add_checkpoint_count("sekolah", total)
+    db.log_pull_summary("sekolah", "wilayah", started_at, datetime.now(),
+                        total, len(kode_wilayah_list), failed)
     logger.info(f"Sekolah: {len(npsn_list)} NPSN total")
     return npsn_list
 
@@ -193,13 +202,15 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict) -> List[str]:
 async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict):
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
+    started_at = datetime.now()
     sem = asyncio.Semaphore(CONCURRENCY)
     write_lock = asyncio.Lock()
     total = 0
+    failed = 0
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async def _one(npsn):
-            nonlocal total
+            nonlocal total, failed
             async with sem:
                 res = await pull_paginated(
                     api, db, session, "/data/by-npsn",
@@ -211,12 +222,15 @@ async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict):
                     if res.ok:
                         await asyncio.to_thread(db.clear_failure, tbl_name, "npsn", npsn)
                     else:
+                        failed += 1
                         await asyncio.to_thread(db.record_failure, tbl_name, "npsn", npsn,
                                                 res.reason, res.detail, res.expected, res.received)
         await asyncio.gather(*[_one(n) for n in npsn_list])
     if total:
         db.set_last_update(tbl_name, datetime.now())
         db.add_checkpoint_count(tbl_name, total)
+    db.log_pull_summary(tbl_name, "npsn", started_at, datetime.now(),
+                        total, len(npsn_list), failed)
     logger.info(f"{tbl_name}: {total} baris diproses")
 
 
@@ -224,13 +238,15 @@ async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict):
 async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dict):
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
+    started_at = datetime.now()
     sem = asyncio.Semaphore(CONCURRENCY)
     write_lock = asyncio.Lock()
     total = 0
+    failed = 0
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async def _one(kode):
-            nonlocal total
+            nonlocal total, failed
             async with sem:
                 res = await pull_paginated(
                     api, db, session, "/data/by-wilayah",
@@ -242,12 +258,15 @@ async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dic
                     if res.ok:
                         await asyncio.to_thread(db.clear_failure, tbl_name, "wilayah", kode)
                     else:
+                        failed += 1
                         await asyncio.to_thread(db.record_failure, tbl_name, "wilayah", kode,
                                                 res.reason, res.detail, res.expected, res.received)
         await asyncio.gather(*[_one(k) for k in kode_wilayah_list])
     if total:
         db.set_last_update(tbl_name, datetime.now())
         db.add_checkpoint_count(tbl_name, total)
+    db.log_pull_summary(tbl_name, "wilayah", started_at, datetime.now(),
+                        total, len(kode_wilayah_list), failed)
     logger.info(f"{tbl_name}: {total} baris diproses")
 
 
@@ -255,6 +274,7 @@ async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dic
 async def pull_ref(tbl_name: str, meta: dict):
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
+    started_at = datetime.now()
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         res = await pull_paginated(
@@ -268,6 +288,8 @@ async def pull_ref(tbl_name: str, meta: dict):
     if res.received:
         db.set_last_update(tbl_name, datetime.now())
         db.add_checkpoint_count(tbl_name, res.received)
+    db.log_pull_summary(tbl_name, "ref", started_at, datetime.now(),
+                        res.received, 1, 0 if res.ok else 1)
     logger.info(f"{tbl_name}: {res.received} baris diproses")
 
 
