@@ -87,6 +87,20 @@ class DatabaseAdapter(ABC):
     @abstractmethod
     def count_failures(self) -> int: ...
 
+    # ── log aktivitas penarikan (1 baris per tabel per run) ────────────────
+    @abstractmethod
+    def ensure_pull_log_table(self): ...
+
+    @abstractmethod
+    def log_pull_summary(self, tbl_name: str, param_type: str, started_at: datetime,
+                         finished_at: datetime, rows_received: int,
+                         entities_total: int, entities_failed: int): ...
+
+    @abstractmethod
+    def purge_old_pull_log(self, retention_days: int) -> int:
+        """Hapus baris pull_log lebih tua dari retention_days; kembalikan jumlah baris dihapus."""
+        ...
+
     # ── konversi nilai (bersama) ───────────────────────────────────────────
     @staticmethod
     def coerce_value(value, type_name: str):
