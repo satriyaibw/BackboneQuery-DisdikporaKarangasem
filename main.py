@@ -49,18 +49,16 @@ def main():
     if args.loop:
         print("Mode Loop aktif: Program akan berjalan otomatis setiap jam 02:00.")
         while True:
+            print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Eksekusi dimulaii...")
+            asyncio.run(backbone_client_pull())
+            print("Eksekusi selesai.\n")
+
             # Hitung jeda waktu menuju jam 02:00 berikutnya
             sleep_seconds = get_seconds_until_next_run(target_hour=2)
             next_run = datetime.now() + timedelta(seconds=sleep_seconds)
             
             print(f"[*] Menunggu... Eksekusi berikutnya pada: {next_run.strftime('%Y-%m-%d %H:%M:%S')}")
             time.sleep(sleep_seconds)
-
-            # Eksekusi fungsi saat jam 02:00
-            print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Eksekusi dimulaii...")
-            asyncio.run(backbone_client_pull())
-            print("Eksekusi selesai.\n")
-        return
 
     # 3. Mode Default (Prefect Serve)
     s = load_settings()
