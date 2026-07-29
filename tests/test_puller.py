@@ -90,3 +90,21 @@ def test_unknown_total_rows_ok_when_no_error():
     api = FakeAPI([{"total_pages": 1, "data": [{"a": 1}]}])  # tanpa total_rows
     res = _run(api, FakeDB())
     assert res.ok is True and res.expected is None and res.received == 1
+
+
+def test_write_lock_path_still_upserts():
+    # Jalur konkuren: upsert lewat write_lock + asyncio.to_thread
+    api = FakeAPI([{"total_rows": 2, "total_pages": 1, "data": [{"a": 1}, {"a": 2}]}])
+    db = FakeDB()
+
+    async def run():
+        lock = asyncio.Lock()
+        return await pull_paginated(
+            api, db, session=None, path="/data/by-npsn",
+            base_params={"npsn": "1", "tbl_name": "guru"},
+            tbl_name="guru", meta={}, logger=logging.getLogger("t"),
+            write_lock=lock)
+
+    res = asyncio.run(run())
+    assert res.ok is True and res.received == 2
+    assert db.upserted == [("guru", [{"a": 1}, {"a": 2}])]
