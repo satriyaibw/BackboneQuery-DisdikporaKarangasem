@@ -1,8 +1,15 @@
-import argparse
-import asyncio
+from dotenv import load_dotenv
 
-from backbone_pull.config import load_settings
-from backbone_pull.flow import backbone_client_pull
+# Muat .env lebih dulu — sebelum modul Prefect diimpor lewat backbone_pull.flow —
+# agar variabel Prefect (mis. PREFECT_API_URL / PREFECT_API_KEY) dari .env sudah
+# tersedia saat Prefect membaca konfigurasinya.
+load_dotenv()
+
+import argparse  # noqa: E402
+import asyncio  # noqa: E402
+
+from backbone_pull.config import load_settings  # noqa: E402
+from backbone_pull.flow import backbone_client_pull  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:

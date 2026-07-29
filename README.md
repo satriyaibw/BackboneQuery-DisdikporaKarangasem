@@ -1,6 +1,6 @@
 # Backbone Client Pull
 
-Proyek Prefect mandiri untuk menarik data dari **Backbone API** (Kemendikdasmen — Satu Data Pendidikan) ke database milik client, berjalan terjadwal secara mandiri di sisi client (on-premise / VM client), tanpa bergantung pada proyek/server lama.
+Proyek Sync Client mandiri untuk menarik data dari **Backbone API** (Kemendikdasmen — Satu Data Pendidikan) ke database milik client, berjalan terjadwal secara mandiri di sisi client (on-premise / VM client), tanpa bergantung pada proyek/server lama.
 
 ## Daftar Isi
 
@@ -9,8 +9,9 @@ Proyek Prefect mandiri untuk menarik data dari **Backbone API** (Kemendikdasmen 
 3. [Langkah Instalasi](#3-langkah-instalasi)
 4. [Konfigurasi `.env`](#4-konfigurasi-env)
 5. [Menjalankan sebagai Service](#5-menjalankan-sebagai-service)
-6. [⚠️ Keamanan — Rotasi Kredensial](#6-️-keamanan--rotasi-kredensial)
-7. [Troubleshooting](#7-troubleshooting)
+6. [Menampilkan di Prefect UI (opsional)](#6-menampilkan-di-prefect-ui-opsional)
+7. [⚠️ Keamanan — Rotasi Kredensial](#7-️-keamanan--rotasi-kredensial)
+8. [Troubleshooting](#8-troubleshooting)
 
 ---
 
@@ -22,7 +23,7 @@ Proyek ini menarik data dari **Backbone API** dan menyimpannya ke database **SQL
 - Menarik daftar wilayah akses (kecamatan) client, lalu menarik data tabel `sekolah` per wilayah untuk mendapatkan daftar NPSN.
 - Berdasarkan metadata, tabel-tabel lain ditarik per NPSN (`param_type=npsn`) atau per wilayah (`param_type=wilayah`); tabel referensi (`param_type=ref`) bersifat opsional (diatur oleh `PULL_REF`).
 - Setiap tabel disimpan dengan skema **incremental**: setiap tabel punya *checkpoint* `last_update` (disimpan di skema `sync`, tabel `pull_checkpoint`) sehingga proses berikutnya hanya menarik data yang berubah sejak penarikan terakhir.
-- Struktur tabel (skema, kolom, tipe data, primary key) dibuat/disesuaikan otomatis mengikuti metadata dari Backbone API (auto DDL), termasuk pembuatan database jika belum ada (bisa dimatikan, lihat §7).
+- Struktur tabel (skema, kolom, tipe data, primary key) dibuat/disesuaikan otomatis mengikuti metadata dari Backbone API (auto DDL), termasuk pembuatan database jika belum ada (bisa dimatikan, lihat §8).
 - Dijalankan terjadwal menggunakan **Prefect `serve`** (cron), sehingga tidak memerlukan Prefect Server/Cloud terpisah — cukup satu proses yang berjalan terus-menerus di sisi client.
 
 Database tujuan dipilih lewat `DB_DIALECT` (`sqlserver` atau `postgres`); logika penarikan data & incremental sama, hanya dialek SQL (tipe kolom, `MERGE`/`ON CONFLICT`, dsb.) yang berbeda di balik layar.
@@ -43,7 +44,7 @@ Database tujuan dipilih lewat `DB_DIALECT` (`sqlserver` atau `postgres`); logika
     powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
     ```
 
-- Akses ke database tujuan (SQL Server **atau** PostgreSQL) dengan user yang punya hak baca/tulis pada database target (lihat §7 soal hak `CREATE DATABASE`).
+- Akses ke database tujuan (SQL Server **atau** PostgreSQL) dengan user yang punya hak baca/tulis pada database target (lihat §8 soal hak `CREATE DATABASE`).
 - Kredensial Backbone API: **service JWT** dan **API key** (didapat dari pengelola Backbone/Kemendikdasmen — bukan bagian dari proyek ini).
 
 ## 3. Langkah Instalasi
@@ -78,10 +79,10 @@ Salin `.env.example` menjadi `.env` lalu isi sesuai lingkungan client. Variabel 
 | `DB_HOST`                  | Wajib   | *(kosong)*                                                             | Host/alamat server database.                                                                                    |
 | `DB_PORT`                  | Wajib*  | `1433`                                                                 | **Default di `.env.example` adalah `1433` (SQL Server)**. Untuk PostgreSQL, ubah menjadi `5432`.                 |
 | `DB_USER`                  | Wajib   | *(kosong)*                                                             | User database.                                                                                                   |
-| `DB_PASSWORD`              | Wajib   | *(kosong)*                                                             | Password database. **Jangan pernah commit nilai asli** (lihat §6).                                              |
+| `DB_PASSWORD`              | Wajib   | *(kosong)*                                                             | Password database. **Jangan pernah commit nilai asli** (lihat §7).                                              |
 | `DB_NAME`                  | Wajib   | `backbone_client`                                                      | Nama database tujuan; boleh diganti sesuai kebutuhan client.                                                    |
-| `DB_AUTO_CREATE_DATABASE`  | Opsional| `true`                                                                 | Jika `true`, aplikasi mencoba membuat database `DB_NAME` otomatis kalau belum ada. Lihat §7.                    |
-| `DB_MAINTENANCE_DB`        | Opsional| `postgres`                                                             | **Hanya relevan untuk `DB_DIALECT=postgres`** — database maintenance yang dipakai untuk `CREATE DATABASE`. Lihat §7. |
+| `DB_AUTO_CREATE_DATABASE`  | Opsional| `true`                                                                 | Jika `true`, aplikasi mencoba membuat database `DB_NAME` otomatis kalau belum ada. Lihat §8.                    |
+| `DB_MAINTENANCE_DB`        | Opsional| `postgres`                                                             | **Hanya relevan untuk `DB_DIALECT=postgres`** — database maintenance yang dipakai untuk `CREATE DATABASE`. Lihat §8. |
 | `BACKBONE_BASE_URL`        | Opsional| `https://api.data.kemendikdasmen.go.id/svc/satu-data/pendidikan/v3`   | URL dasar Backbone API. Biasanya tidak perlu diubah.                                                             |
 | `BACKBONE_API_KEY`         | Wajib   | *(kosong)*                                                             | API key Backbone milik client.                                                                                  |
 | `BACKBONE_SERVICE_JWT`     | Wajib   | *(kosong)*                                                             | Service JWT Backbone milik client.                                                                              |
@@ -146,7 +147,46 @@ Cek status/log dengan `systemctl status backbone-client-pull` dan `journalctl -u
 
 Cek/atur ulang service kapan saja dengan `nssm edit BackboneClientPull`; hapus dengan `nssm remove BackboneClientPull confirm`.
 
-## 6. ⚠️ Keamanan — Rotasi Kredensial
+## 6. Menampilkan di Prefect UI (opsional)
+
+Secara default, `uv run python main.py` berjalan dalam mode **Prefect `serve` ringan** tanpa server terpisah — cukup untuk penarikan terjadwal, tetapi tanpa dashboard. Jika Anda ingin memantau lewat **Prefect UI** (riwayat *run*, log realtime, status jadwal, dan *Quick run* manual), jalankan **Prefect Server self-hosted** lalu arahkan proses `serve` ke server tersebut. **Logika penarikan tidak berubah** — cukup satu variabel `PREFECT_API_URL`.
+
+### 6.1 Jalankan Prefect Server (Docker)
+
+Proyek ini menyertakan `docker-compose.yml` berisi **Prefect Server + PostgreSQL** (penyimpanan metadata). Dari folder proyek:
+
+```bash
+docker compose up -d                    # jalankan server + database di background
+docker compose logs -f prefect-server   # (opsional) pantau proses startup
+```
+
+- UI tersedia di **http://127.0.0.1:4200**.
+- Metadata Prefect tersimpan di volume Docker (`prefect-db`) — tetap ada walau container di-restart.
+- Hentikan dengan `docker compose down` (data tetap tersimpan) atau `docker compose down -v` (hapus juga volume/metadata).
+
+> Prasyarat: Docker + Docker Compose terpasang di mesin server. Server ini terpisah dari database **tujuan penarikan** (SQL Server/PostgreSQL milik client) — PostgreSQL di `docker-compose.yml` hanya untuk metadata Prefect.
+
+### 6.2 Arahkan penarikan ke server
+
+Di `.env`, aktifkan `PREFECT_API_URL` dengan endpoint API server:
+
+```
+PREFECT_API_URL=http://127.0.0.1:4200/api
+```
+
+(Jika server berada di mesin lain, ganti `127.0.0.1` dengan host/IP server.) Lalu jalankan penarikan seperti biasa:
+
+```bash
+uv run python main.py
+```
+
+Deployment `backbone-client-pull` beserta seluruh *flow run*, *task run*, log, dan jadwalnya kini muncul di Prefect UI, dan Anda bisa memicu penarikan manual lewat tombol **Quick run**. Proses `main.py` tetap menjadi **eksekutor** dan harus terus berjalan (lihat §5 untuk menjalankannya sebagai service); server hanya menyimpan state & menyediakan UI.
+
+> **Catatan:** bila `PREFECT_API_URL` dikosongkan/di-nonaktifkan, aplikasi kembali ke mode ringan tanpa UI (tidak perlu server). Menjalankan server bersifat **opsional** dan tidak mengubah logika penarikan.
+>
+> **Alternatif Prefect Cloud:** daripada server self-hosted, Anda bisa memakai [Prefect Cloud](https://app.prefect.cloud) — jalankan `uv run prefect cloud login`, atau isi `PREFECT_API_URL` (URL API workspace Cloud) dan `PREFECT_API_KEY` di `.env`. Metadata *run* akan terkirim ke Cloud — pertimbangkan kebijakan data sebelum memakainya.
+
+## 7. ⚠️ Keamanan — Rotasi Kredensial
 
 > **Peringatan penting sebelum membagikan atau memindahkan proyek ini ke pihak lain (client, repo baru, dsb.):**
 
@@ -155,7 +195,7 @@ Cek/atur ulang service kapan saja dengan `nssm edit BackboneClientPull`; hapus d
 - **`.env` tidak boleh pernah di-commit ke git** (sudah didaftarkan di `.gitignore`). Selalu gunakan `.env.example` sebagai template dan isi `.env` secara lokal/manual di server client.
 - Perlakukan `.env` seperti file rahasia: batasi hak akses baca (mis. `chmod 600 .env` di Linux), jangan kirim lewat chat/email tanpa enkripsi, dan simpan salinan cadangan kredensial di pengelola secret (password manager/vault), bukan di dalam repo.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 - **Gagal membuat database otomatis / error hak akses (`CREATE DATABASE`)**
   Saat `DB_AUTO_CREATE_DATABASE=true` (default), aplikasi mencoba membuat database `DB_NAME` jika belum ada — ini butuh user DB dengan hak `CREATE DATABASE` di server. Jika user tidak punya hak tersebut, ada dua opsi:
