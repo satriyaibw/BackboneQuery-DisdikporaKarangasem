@@ -25,7 +25,7 @@ Proyek ini menarik data dari **Backbone API** dan menyimpannya ke database **SQL
 - Setiap tabel disimpan dengan skema **incremental**: setiap tabel punya *checkpoint* `last_update` (disimpan di skema `sync`, tabel `pull_checkpoint`) sehingga proses berikutnya hanya menarik data yang berubah sejak penarikan terakhir.
 - Struktur tabel (skema, kolom, tipe data, primary key) dibuat/disesuaikan otomatis mengikuti metadata dari Backbone API (auto DDL), termasuk pembuatan database jika belum ada (bisa dimatikan, lihat §8).
 - Penarikan dilakukan **paralel** (banyak NPSN/kecamatan sekaligus) dengan *rate limiter* yang menjaga laju request tidak melebihi batas API (default 20/detik) — jauh lebih cepat dari sekuensial, tetap aman. Diatur lewat `BACKBONE_CONCURRENCY` & `BACKBONE_RATE_LIMIT`.
-- Dijalankan terjadwal menggunakan **Prefect `serve`** (cron), sehingga tidak memerlukan Prefect Server/Cloud terpisah — cukup satu proses yang berjalan terus-menerus di sisi client.
+- Dijalankan lewat **Prefect `serve`** — satu proses yang berjalan terus-menerus di sisi client. **Penting:** agar jadwal (`SCHEDULE_CRON`) benar-benar memicu run **otomatis**, proses ini harus tersambung ke **Prefect Server** (self-hosted, lihat §6) atau Prefect Cloud. Tanpa itu (mode ringan/*ephemeral*, default), jadwal terdaftar tapi **tidak pernah otomatis terpicu** — lihat peringatan & alternatif di §5.
 
 Database tujuan dipilih lewat `DB_DIALECT` (`sqlserver` atau `postgres`); logika penarikan data & incremental sama, hanya dialek SQL (tipe kolom, `MERGE`/`ON CONFLICT`, dsb.) yang berbeda di balik layar.
 
@@ -92,7 +92,7 @@ Salin `.env.example` menjadi `.env` lalu isi sesuai lingkungan client. Variabel 
 | `BACKBONE_PER_PAGE`        | Opsional| `500`                                                                  | Jumlah baris per halaman saat memanggil API Backbone.                                                            |
 | `BACKBONE_RATE_LIMIT`      | Opsional| `20`                                                                   | Maks request/detik ke Backbone API (batas resmi saat ini **20/detik**). Penarikan dijaga tidak melebihi ini. Naikkan bila batas API dinaikkan. |
 | `BACKBONE_CONCURRENCY`     | Opsional| `16`                                                                   | Jumlah entity (NPSN/kecamatan) yang ditarik **paralel**. Semakin besar semakin cepat, tetap dibatasi `BACKBONE_RATE_LIMIT`. |
-| `SCHEDULE_CRON`            | Opsional| `0 2 * * *`                                                            | Jadwal cron standar (menit jam tgl bulan hari) untuk `main.py` (tanpa `--run-once`). Default: setiap hari jam 02:00. |
+| `SCHEDULE_CRON`            | Opsional| `0 2 * * *`                                                            | Jadwal cron standar (menit jam tgl bulan hari) untuk `main.py` (tanpa `--run-once`). Default: setiap hari jam 02:00. **Hanya benar-benar memicu run otomatis jika Prefect Server aktif** — lihat peringatan di §5. |
 | `SCHEDULE_TIMEZONE`        | Opsional| `Asia/Jakarta`                                                         | Timezone untuk `SCHEDULE_CRON`.                                                                                  |
 | `DEPLOYMENT_NAME`          | Opsional| `backbone-client-pull`                                                 | Nama deployment yang didaftarkan ke Prefect `serve`.                                                             |
 | `PULL_REF`                 | Opsional| `false`                                                                | Jika `true`, tabel referensi (`param_type=ref`) ikut ditarik setiap siklus.                                      |
@@ -106,7 +106,37 @@ Nilai boolean (`DB_AUTO_CREATE_DATABASE`, `PULL_REF`) menerima `true/false`, `1/
 
 Untuk produksi, jalankan `uv run python main.py` (mode `serve`, bukan `--run-once`) sebagai *service* yang otomatis restart bila crash dan otomatis jalan saat server reboot.
 
-### systemd (Linux)
+> ⚠️ **Penting — `SCHEDULE_CRON` TIDAK otomatis berjalan tanpa Prefect Server.**
+> Proses `main.py` (mode `serve`) hanya **mem-poll run yang sudah dijadwalkan oleh server** — ia tidak mengevaluasi cron sendiri secara lokal. Dalam mode ringan/*ephemeral* (default, `PREFECT_API_URL` nonaktif), tidak ada layanan penjadwal yang berjalan, sehingga run terjadwal **tidak pernah otomatis terpicu** — proses hanya diam menunggu (akan terlihat warning `Cannot schedule flows on an ephemeral server` di log). Pilih salah satu **sebelum** memasang service produksi di bawah:
+>
+> - **Opsi A — pakai Prefect Server (rekomendasi bila ingin jadwal otomatis via Prefect):** aktifkan dulu (`docker compose up -d` + set `PREFECT_API_URL` di `.env`, lihat §6), baru pasang service `serve` di bawah. Scheduler sungguhan akan memicu run sesuai `SCHEDULE_CRON`, riwayatnya terlihat di Prefect UI.
+> - **Opsi B — tanpa Prefect Server:** jangan andalkan `SCHEDULE_CRON`/mode `serve`. Jadwalkan `uv run python main.py --run-once` (sekali jalan lalu keluar) lewat **penjadwal OS** — lihat §5.1 di bawah.
+>
+> Memicu run manual kapan saja (kedua opsi): `uv run python main.py --run-once`, atau (bila `serve` sedang berjalan & tersambung Prefect Server) `prefect deployment run 'backbone-client-pull/backbone-client-pull'`.
+
+### 5.1 Alternatif tanpa Prefect Server: jadwal via OS (Opsi B)
+
+Jalankan `uv run python main.py --run-once` langsung lewat penjadwal bawaan OS — tanpa `serve`, tanpa Prefect Server, tanpa NSSM/systemd (§5.2/§5.3 di bawah tidak diperlukan untuk opsi ini).
+
+**Windows (Task Scheduler):**
+1. Buka **Task Scheduler** (`taskschd.msc`) → **Create Basic Task**.
+2. **Trigger**: Daily, jam sesuai kebutuhan (mis. 02:00).
+3. **Action**: Start a program —
+   - **Program/script**: `uv` (atau path lengkap ke `uv.exe`, hasil `where uv`)
+   - **Add arguments**: `run python main.py --run-once`
+   - **Start in**: path folder proyek (folder yang berisi `main.py` dan `.env`)
+4. Selesai. Uji jalankan task-nya sekali secara manual dari Task Scheduler untuk memastikan berhasil.
+
+**Linux (cron):**
+```bash
+crontab -e
+```
+Tambahkan (sesuaikan path & jadwal):
+```
+0 2 * * * cd /opt/backbone-client-pull && /usr/bin/env uv run python main.py --run-once >> logs/cron.log 2>&1
+```
+
+### 5.2 systemd (Linux) — untuk Opsi A (mode `serve`)
 
 Buat file `/etc/systemd/system/backbone-client-pull.service`:
 
@@ -136,7 +166,7 @@ sudo systemctl enable --now backbone-client-pull
 
 Cek status/log dengan `systemctl status backbone-client-pull` dan `journalctl -u backbone-client-pull -f`.
 
-### NSSM (Windows)
+### 5.3 NSSM (Windows) — untuk Opsi A (mode `serve`)
 
 [NSSM](https://nssm.cc/) membungkus proses biasa menjadi Windows Service.
 
