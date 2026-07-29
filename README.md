@@ -96,6 +96,7 @@ Salin `.env.example` menjadi `.env` lalu isi sesuai lingkungan client. Variabel 
 | `SCHEDULE_TIMEZONE`        | Opsional| `Asia/Jakarta`                                                         | Timezone untuk `SCHEDULE_CRON`.                                                                                  |
 | `DEPLOYMENT_NAME`          | Opsional| `backbone-client-pull`                                                 | Nama deployment yang didaftarkan ke Prefect `serve`.                                                             |
 | `PULL_REF`                 | Opsional| `false`                                                                | Jika `true`, tabel referensi (`param_type=ref`) ikut ditarik setiap siklus.                                      |
+| `PULL_LOG_RETENTION_DAYS`  | Opsional| `60`                                                                   | Berapa hari riwayat aktivitas (`sync.pull_log`) disimpan sebelum dihapus otomatis. Lihat §8.                     |
 
 \* `DB_PORT` punya default per dialect di kode (`1433` untuk `sqlserver`, `5432` untuk `postgres`) jika variabel dikosongkan sepenuhnya — namun karena `.env.example` sudah mengisi `1433`, **wajib diubah manual menjadi `5432` saat memakai PostgreSQL**.
 
@@ -234,3 +235,18 @@ Arti kolom `reason`:
 - Di **akhir setiap run**, item di `sync.pull_failures` dicoba ulang sekali — *full pull* tanpa filter incremental agar dijamin lengkap. Yang berhasil dihapus dari tabel.
 - Item yang masih gagal **tetap tersimpan** dan **dicoba lagi otomatis pada run terjadwal berikutnya**. Gap akan menutup sendiri saat sumber pulih — Anda cukup memantau apakah `sync.pull_failures` sudah kosong.
 - Untuk memaksa coba ulang segera (tanpa menunggu jadwal): jalankan `uv run python main.py --run-once`.
+
+### Riwayat aktivitas penarikan (`sync.pull_log`)
+Setiap kali sebuah tabel selesai ditarik (per run), satu baris ringkasan dicatat ke tabel **`sync.pull_log`** — sehingga aktivitas penarikan bisa dicek kapan saja tanpa perlu membuka log Prefect/terminal:
+
+```sql
+SELECT tbl_name, param_type, run_started_at, run_finished_at, duration_seconds,
+       rows_received, entities_total, entities_failed, status
+FROM sync.pull_log
+ORDER BY run_started_at DESC;
+```
+
+- Satu baris per **tabel per run** (bukan per NPSN/kecamatan/halaman), jadi volumenya kecil (maks puluhan–ratusan baris per run) dan tidak berdampak ke kecepatan penarikan.
+- `status` = `ok` bila semua entity untuk tabel itu lengkap; `incomplete` bila ada yang gagal (lihat detailnya di `sync.pull_failures`).
+- Baris lebih tua dari `PULL_LOG_RETENTION_DAYS` hari (default **60 hari**, ±2 bulan) **dihapus otomatis** di awal tiap run — tidak perlu pembersihan manual.
+- Detail per akses endpoint (tiap request HTTP) tetap tersedia di log Prefect/terminal (lihat `journalctl -u backbone-client-pull` bila dijalankan sebagai service, §5) — `sync.pull_log` hanya menyimpan ringkasannya agar hemat & cepat.
