@@ -24,6 +24,7 @@ Proyek ini menarik data dari **Backbone API** dan menyimpannya ke database **SQL
 - Berdasarkan metadata, tabel-tabel lain ditarik per NPSN (`param_type=npsn`) atau per wilayah (`param_type=wilayah`); tabel referensi (`param_type=ref`) bersifat opsional (diatur oleh `PULL_REF`).
 - Setiap tabel disimpan dengan skema **incremental**: setiap tabel punya *checkpoint* `last_update` (disimpan di skema `sync`, tabel `pull_checkpoint`) sehingga proses berikutnya hanya menarik data yang berubah sejak penarikan terakhir.
 - Struktur tabel (skema, kolom, tipe data, primary key) dibuat/disesuaikan otomatis mengikuti metadata dari Backbone API (auto DDL), termasuk pembuatan database jika belum ada (bisa dimatikan, lihat §8).
+- Penarikan dilakukan **paralel** (banyak NPSN/kecamatan sekaligus) dengan *rate limiter* yang menjaga laju request tidak melebihi batas API (default 20/detik) — jauh lebih cepat dari sekuensial, tetap aman. Diatur lewat `BACKBONE_CONCURRENCY` & `BACKBONE_RATE_LIMIT`.
 - Dijalankan terjadwal menggunakan **Prefect `serve`** (cron), sehingga tidak memerlukan Prefect Server/Cloud terpisah — cukup satu proses yang berjalan terus-menerus di sisi client.
 
 Database tujuan dipilih lewat `DB_DIALECT` (`sqlserver` atau `postgres`); logika penarikan data & incremental sama, hanya dialek SQL (tipe kolom, `MERGE`/`ON CONFLICT`, dsb.) yang berbeda di balik layar.
@@ -89,6 +90,8 @@ Salin `.env.example` menjadi `.env` lalu isi sesuai lingkungan client. Variabel 
 | `BACKBONE_USERNAME`        | Wajib   | *(kosong)*                                                             | Username akun Backbone milik client. Dipakai untuk mengambil access-token otomatis.                             |
 | `BACKBONE_PASSWORD`        | Wajib   | *(kosong)*                                                             | Password akun Backbone milik client. **Jangan pernah commit nilai asli** (lihat §7).                            |
 | `BACKBONE_PER_PAGE`        | Opsional| `500`                                                                  | Jumlah baris per halaman saat memanggil API Backbone.                                                            |
+| `BACKBONE_RATE_LIMIT`      | Opsional| `20`                                                                   | Maks request/detik ke Backbone API (batas resmi saat ini **20/detik**). Penarikan dijaga tidak melebihi ini. Naikkan bila batas API dinaikkan. |
+| `BACKBONE_CONCURRENCY`     | Opsional| `16`                                                                   | Jumlah entity (NPSN/kecamatan) yang ditarik **paralel**. Semakin besar semakin cepat, tetap dibatasi `BACKBONE_RATE_LIMIT`. |
 | `SCHEDULE_CRON`            | Opsional| `0 2 * * *`                                                            | Jadwal cron standar (menit jam tgl bulan hari) untuk `main.py` (tanpa `--run-once`). Default: setiap hari jam 02:00. |
 | `SCHEDULE_TIMEZONE`        | Opsional| `Asia/Jakarta`                                                         | Timezone untuk `SCHEDULE_CRON`.                                                                                  |
 | `DEPLOYMENT_NAME`          | Opsional| `backbone-client-pull`                                                 | Nama deployment yang didaftarkan ke Prefect `serve`.                                                             |

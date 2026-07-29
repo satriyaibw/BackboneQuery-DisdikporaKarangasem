@@ -6,6 +6,7 @@ yang dilaporkan API. Hasilnya (`PullResult`) dipakai flow untuk memutuskan
 apakah entity itu lengkap, atau perlu dicatat ke dead-letter.
 """
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -21,7 +22,8 @@ class PullResult:
 
 
 async def pull_paginated(api, db, session, path, base_params, tbl_name, meta, logger,
-                         last_update=None, per_page=500, collect=False) -> PullResult:
+                         last_update=None, per_page=500, collect=False,
+                         write_lock=None) -> PullResult:
     received = 0
     expected: Optional[int] = None
     rows: List[dict] = []
@@ -49,7 +51,12 @@ async def pull_paginated(api, db, session, path, base_params, tbl_name, meta, lo
             expected = result.get("total_rows")
 
         if data:
-            db.upsert_rows(tbl_name, data, meta)
+            if write_lock is not None:
+                # Tulis diserialisasi (anti-deadlock) + non-blocking terhadap event loop.
+                async with write_lock:
+                    await asyncio.to_thread(db.upsert_rows, tbl_name, data, meta)
+            else:
+                db.upsert_rows(tbl_name, data, meta)
             received += len(data)
             if collect:
                 rows.extend(data)

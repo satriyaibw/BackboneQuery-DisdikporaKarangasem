@@ -12,11 +12,12 @@ class BackboneAPI:
     """
 
     def __init__(self, base_url: str, api_key: str, auth_url: str,
-                 username: str, password: str):
+                 username: str, password: str, rate_limiter=None):
         self.base_url = base_url.rstrip("/")
         self.auth_url = auth_url
         self.username = username
         self.password = password
+        self.rate_limiter = rate_limiter
         self.base_headers = {"X-API-Key": api_key, "Accept": "application/json"}
         # Belum ada Authorization sampai fetch_token() dipanggil.
         self.headers = dict(self.base_headers)
@@ -37,6 +38,8 @@ class BackboneAPI:
 
     async def get(self, session: aiohttp.ClientSession, path: str,
                   params: dict = None) -> dict:
+        if self.rate_limiter is not None:
+            await self.rate_limiter.acquire()
         url = f"{self.base_url}{path}"
         async with session.get(url, params=params, headers=self.headers) as resp:
             resp.raise_for_status()

@@ -31,6 +31,16 @@ def _int(name: str, default) -> int:
         raise MissingConfigError(f"{name} harus berupa angka, bukan '{val}'")
 
 
+def _float(name: str, default) -> float:
+    val = os.getenv(name)
+    if val is None or val == "":
+        val = default
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        raise MissingConfigError(f"{name} harus berupa angka, bukan '{val}'")
+
+
 @dataclass
 class Settings:
     db_dialect: str
@@ -47,6 +57,8 @@ class Settings:
     backbone_username: str
     backbone_password: str
     backbone_per_page: int
+    backbone_rate_limit: float
+    backbone_concurrency: int
     schedule_cron: str
     schedule_timezone: str
     deployment_name: str
@@ -93,6 +105,8 @@ def load_settings() -> Settings:
         backbone_username=required["BACKBONE_USERNAME"],
         backbone_password=required["BACKBONE_PASSWORD"],
         backbone_per_page=_int("BACKBONE_PER_PAGE", 500),
+        backbone_rate_limit=_float("BACKBONE_RATE_LIMIT", 20),
+        backbone_concurrency=_int("BACKBONE_CONCURRENCY", 16),
         schedule_cron=os.getenv("SCHEDULE_CRON") or "0 2 * * *",
         schedule_timezone=os.getenv("SCHEDULE_TIMEZONE") or "Asia/Jakarta",
         deployment_name=os.getenv("DEPLOYMENT_NAME") or "backbone-client-pull",
