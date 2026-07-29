@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from typing import Dict, List
 
@@ -10,13 +11,16 @@ from .config import load_settings
 from .db import get_adapter
 from .puller import pull_paginated
 from .routing import route_tables
+from .throttle import RateLimiter
 
 settings = load_settings()
+rate_limiter = RateLimiter(settings.backbone_rate_limit)
 api = BackboneAPI(settings.backbone_base_url, settings.backbone_api_key,
                   settings.backbone_auth_url, settings.backbone_username,
-                  settings.backbone_password)
+                  settings.backbone_password, rate_limiter=rate_limiter)
 db = get_adapter(settings)
 PER_PAGE = settings.backbone_per_page
+CONCURRENCY = settings.backbone_concurrency
 
 
 def assert_complete(n_failures: int):
@@ -116,27 +120,35 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict) -> List[str]:
         npsn_list = []
     logger.info(f"Sekolah: {len(npsn_list)} NPSN dari target DB")
 
+    sem = asyncio.Semaphore(CONCURRENCY)
+    write_lock = asyncio.Lock()
     total = 0
+    collected: List[str] = []
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        for kode in kode_wilayah_list:
-            res = await pull_paginated(
-                api, db, session, "/data/by-wilayah",
-                {"tbl_name": "sekolah", "kode_wilayah": kode},
-                "sekolah", meta, logger, last_update, PER_PAGE, collect=True)
-            total += res.received
-            if res.ok:
-                db.clear_failure("sekolah", "wilayah", kode)
-            else:
-                logger.warning(f"Sekolah wilayah {kode}: {res.reason} — {res.detail}")
-                db.record_failure("sekolah", "wilayah", kode, res.reason,
-                                  res.detail, res.expected, res.received)
-            npsn_list += [r["npsn"] for r in res.rows if r.get("npsn")]
+        async def _one(kode):
+            nonlocal total
+            async with sem:
+                res = await pull_paginated(
+                    api, db, session, "/data/by-wilayah",
+                    {"tbl_name": "sekolah", "kode_wilayah": kode},
+                    "sekolah", meta, logger, last_update, PER_PAGE,
+                    collect=True, write_lock=write_lock)
+                total += res.received
+                async with write_lock:
+                    if res.ok:
+                        await asyncio.to_thread(db.clear_failure, "sekolah", "wilayah", kode)
+                    else:
+                        logger.warning(f"Sekolah wilayah {kode}: {res.reason} — {res.detail}")
+                        await asyncio.to_thread(db.record_failure, "sekolah", "wilayah", kode,
+                                                res.reason, res.detail, res.expected, res.received)
+                collected.extend(r["npsn"] for r in res.rows if r.get("npsn"))
+        await asyncio.gather(*[_one(k) for k in kode_wilayah_list])
 
+    npsn_list = list(dict.fromkeys(npsn_list + collected))
     if total:
         db.set_last_update("sekolah", datetime.now())
         db.add_checkpoint_count("sekolah", total)
-    npsn_list = list(dict.fromkeys(npsn_list))
     logger.info(f"Sekolah: {len(npsn_list)} NPSN total")
     return npsn_list
 
@@ -145,20 +157,27 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict) -> List[str]:
 async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict):
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
+    sem = asyncio.Semaphore(CONCURRENCY)
+    write_lock = asyncio.Lock()
     total = 0
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        for npsn in npsn_list:
-            res = await pull_paginated(
-                api, db, session, "/data/by-npsn",
-                {"npsn": npsn, "tbl_name": tbl_name},
-                tbl_name, meta, logger, last_update, PER_PAGE)
-            total += res.received
-            if res.ok:
-                db.clear_failure(tbl_name, "npsn", npsn)
-            else:
-                db.record_failure(tbl_name, "npsn", npsn, res.reason,
-                                  res.detail, res.expected, res.received)
+        async def _one(npsn):
+            nonlocal total
+            async with sem:
+                res = await pull_paginated(
+                    api, db, session, "/data/by-npsn",
+                    {"npsn": npsn, "tbl_name": tbl_name},
+                    tbl_name, meta, logger, last_update, PER_PAGE,
+                    write_lock=write_lock)
+                total += res.received
+                async with write_lock:
+                    if res.ok:
+                        await asyncio.to_thread(db.clear_failure, tbl_name, "npsn", npsn)
+                    else:
+                        await asyncio.to_thread(db.record_failure, tbl_name, "npsn", npsn,
+                                                res.reason, res.detail, res.expected, res.received)
+        await asyncio.gather(*[_one(n) for n in npsn_list])
     if total:
         db.set_last_update(tbl_name, datetime.now())
         db.add_checkpoint_count(tbl_name, total)
@@ -169,20 +188,27 @@ async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict):
 async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dict):
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
+    sem = asyncio.Semaphore(CONCURRENCY)
+    write_lock = asyncio.Lock()
     total = 0
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        for kode in kode_wilayah_list:
-            res = await pull_paginated(
-                api, db, session, "/data/by-wilayah",
-                {"tbl_name": tbl_name, "kode_wilayah": kode},
-                tbl_name, meta, logger, last_update, PER_PAGE)
-            total += res.received
-            if res.ok:
-                db.clear_failure(tbl_name, "wilayah", kode)
-            else:
-                db.record_failure(tbl_name, "wilayah", kode, res.reason,
-                                  res.detail, res.expected, res.received)
+        async def _one(kode):
+            nonlocal total
+            async with sem:
+                res = await pull_paginated(
+                    api, db, session, "/data/by-wilayah",
+                    {"tbl_name": tbl_name, "kode_wilayah": kode},
+                    tbl_name, meta, logger, last_update, PER_PAGE,
+                    write_lock=write_lock)
+                total += res.received
+                async with write_lock:
+                    if res.ok:
+                        await asyncio.to_thread(db.clear_failure, tbl_name, "wilayah", kode)
+                    else:
+                        await asyncio.to_thread(db.record_failure, tbl_name, "wilayah", kode,
+                                                res.reason, res.detail, res.expected, res.received)
+        await asyncio.gather(*[_one(k) for k in kode_wilayah_list])
     if total:
         db.set_last_update(tbl_name, datetime.now())
         db.add_checkpoint_count(tbl_name, total)
