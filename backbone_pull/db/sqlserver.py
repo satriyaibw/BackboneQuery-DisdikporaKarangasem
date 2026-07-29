@@ -239,3 +239,44 @@ class SqlServerAdapter(DatabaseAdapter):
             return conn.execute(text(
                 f"SELECT COUNT(*) FROM [{self.schema_ctrl}].pull_failures"
             )).scalar() or 0
+
+    # ── log aktivitas penarikan ──────────────────────────────────────────────
+    def ensure_pull_log_table(self):
+        self.ensure_schema(self.schema_ctrl)
+        with self._engine.begin() as conn:
+            conn.execute(text(
+                f"IF OBJECT_ID('[{self.schema_ctrl}].pull_log', 'U') IS NULL "
+                f"CREATE TABLE [{self.schema_ctrl}].pull_log ("
+                "  id BIGINT IDENTITY(1,1) PRIMARY KEY,"
+                "  tbl_name NVARCHAR(100) NOT NULL,"
+                "  param_type NVARCHAR(20) NOT NULL,"
+                "  run_started_at DATETIME2 NOT NULL,"
+                "  run_finished_at DATETIME2 NOT NULL,"
+                "  duration_seconds FLOAT NOT NULL,"
+                "  rows_received BIGINT NOT NULL DEFAULT 0,"
+                "  entities_total INT NOT NULL DEFAULT 0,"
+                "  entities_failed INT NOT NULL DEFAULT 0,"
+                "  status NVARCHAR(20) NOT NULL);"
+            ))
+
+    def log_pull_summary(self, tbl_name, param_type, started_at, finished_at,
+                         rows_received, entities_total, entities_failed):
+        duration = (finished_at - started_at).total_seconds()
+        status = "ok" if entities_failed == 0 else "incomplete"
+        with self._engine.begin() as conn:
+            conn.execute(text(
+                f"INSERT INTO [{self.schema_ctrl}].pull_log "
+                "(tbl_name, param_type, run_started_at, run_finished_at, duration_seconds, "
+                " rows_received, entities_total, entities_failed, status) "
+                "VALUES (:tbl, :pt, :started, :finished, :dur, :rows, :etotal, :efail, :status)"
+            ), {"tbl": tbl_name, "pt": param_type, "started": started_at, "finished": finished_at,
+                "dur": duration, "rows": rows_received, "etotal": entities_total,
+                "efail": entities_failed, "status": status})
+
+    def purge_old_pull_log(self, retention_days: int) -> int:
+        with self._engine.begin() as conn:
+            result = conn.execute(text(
+                f"DELETE FROM [{self.schema_ctrl}].pull_log "
+                "WHERE run_started_at < DATEADD(day, :neg_days, GETDATE())"
+            ), {"neg_days": -retention_days})
+            return result.rowcount or 0
