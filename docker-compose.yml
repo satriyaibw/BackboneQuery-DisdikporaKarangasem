@@ -1,0 +1,43 @@
+# Prefect Server self-hosted (opsional) untuk menampilkan Backbone Client Pull
+# di Prefect UI. Ini TIDAK menjalankan penarikan data — penarikan tetap dijalankan
+# oleh `uv run python main.py` di sisi host (lihat README §6).
+#
+#   docker compose up -d        # jalankan server + database di background
+#   # UI: http://127.0.0.1:4200
+#   # lalu di .env set: PREFECT_API_URL=http://127.0.0.1:4200/api
+#   docker compose down         # hentikan (data metadata tetap tersimpan di volume)
+#   docker compose down -v      # hentikan + hapus volume (reset metadata Prefect)
+
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: prefect
+      POSTGRES_PASSWORD: prefect
+      POSTGRES_DB: prefect
+    volumes:
+      - prefect-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect -d prefect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      # Metadata Prefect disimpan di PostgreSQL container `database`.
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:prefect@database:5432/prefect
+      # Bind ke semua interface agar UI/API dapat diakses dari host.
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "4200:4200"
+    restart: unless-stopped
+
+volumes:
+  prefect-db:
