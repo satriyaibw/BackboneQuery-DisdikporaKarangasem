@@ -11,6 +11,7 @@ Proyek Sync Client mandiri untuk menarik data dari **Backbone API** (Kemendikdas
 5. [Menjalankan sebagai Service](#5-menjalankan-sebagai-service)
 6. [Menampilkan di Prefect UI (opsional)](#6-menampilkan-di-prefect-ui-opsional)
 7. [Troubleshooting](#7-troubleshooting)
+8. [Memastikan Kelengkapan Data](#8-memastikan-kelengkapan-data)
 
 ---
 
@@ -205,3 +206,28 @@ Deployment `backbone-client-pull` beserta seluruh *flow run*, *task run*, log, d
 
 - **`uv run python -m backbone_pull.check` melaporkan `[GAGAL]` pada koneksi database**
   Periksa `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, dan `DB_NAME`; pastikan server database dapat dijangkau dari mesin client (firewall/network) dan driver terkait (`pymssql` untuk SQL Server, `psycopg2-binary` untuk PostgreSQL) sudah terinstal lewat `uv sync`.
+
+## 8. Memastikan Kelengkapan Data
+
+Penarikan ini memverifikasi kelengkapan secara otomatis, sehingga status run bisa dipercaya:
+
+- **Run HIJAU (sukses) = data 100% lengkap.** Untuk tiap entity (NPSN / kecamatan) × tabel, jumlah baris yang diterima dibandingkan dengan `total_rows` yang dilaporkan API. Bila semua cocok dan tanpa error, run sukses.
+- **Run MERAH (gagal) = ada yang belum lengkap.** Flow sengaja digagalkan di akhir bila masih ada item yang belum lengkap — jadi terlihat jelas di Prefect UI / *exit code*, bukan "hijau palsu".
+
+### Melihat apa yang gagal
+Item yang gagal/tidak lengkap dicatat di tabel **`sync.pull_failures`** pada database target:
+
+```sql
+SELECT tbl_name, param_type, entity_id, reason, detail, expected, received, attempts, failed_at
+FROM sync.pull_failures;
+```
+
+Arti kolom `reason`:
+- `error` — gagal memanggil API setelah beberapa kali retry (mis. jaringan/timeout).
+- `sp_error` — API mengembalikan pesan error (field `keterangan`).
+- `incomplete` — jumlah baris diterima < `total_rows` (bandingkan `expected` vs `received`).
+
+### Pemulihan otomatis
+- Di **akhir setiap run**, item di `sync.pull_failures` dicoba ulang sekali — *full pull* tanpa filter incremental agar dijamin lengkap. Yang berhasil dihapus dari tabel.
+- Item yang masih gagal **tetap tersimpan** dan **dicoba lagi otomatis pada run terjadwal berikutnya**. Gap akan menutup sendiri saat sumber pulih — Anda cukup memantau apakah `sync.pull_failures` sudah kosong.
+- Untuk memaksa coba ulang segera (tanpa menunggu jadwal): jalankan `uv run python main.py --run-once`.
