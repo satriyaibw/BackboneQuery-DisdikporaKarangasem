@@ -5,15 +5,35 @@ import aiohttp
 
 
 class BackboneAPI:
-    """Client tipis untuk Backbone API: header tetap + GET + retry."""
+    """Client tipis untuk Backbone API: ambil access-token + GET + retry.
 
-    def __init__(self, base_url: str, api_key: str, service_jwt: str):
+    Access-token (JWT) ditukar dari username/password lewat `fetch_token`; sesudah
+    itu `headers` berisi Bearer <token> + X-API-Key untuk semua request data.
+    """
+
+    def __init__(self, base_url: str, api_key: str, auth_url: str,
+                 username: str, password: str):
         self.base_url = base_url.rstrip("/")
-        self.headers = {
-            "Authorization": f"Bearer {service_jwt}",
-            "X-API-Key": api_key,
-            "Accept": "application/json",
-        }
+        self.auth_url = auth_url
+        self.username = username
+        self.password = password
+        self.base_headers = {"X-API-Key": api_key, "Accept": "application/json"}
+        # Belum ada Authorization sampai fetch_token() dipanggil.
+        self.headers = dict(self.base_headers)
+
+    async def fetch_token(self, session: aiohttp.ClientSession) -> str:
+        """Tukar username/password → access-token, lalu set header Bearer."""
+        form = {"username": self.username, "password": self.password}
+        headers = {"accept": "application/json",
+                   "content-type": "application/x-www-form-urlencoded"}
+        async with session.post(self.auth_url, data=form, headers=headers) as resp:
+            resp.raise_for_status()
+            body = await resp.json()
+        token = body.get("access_token")
+        if not token:
+            raise RuntimeError("Response access-token tidak berisi 'access_token'.")
+        self.headers = {**self.base_headers, "Authorization": f"Bearer {token}"}
+        return token
 
     async def get(self, session: aiohttp.ClientSession, path: str,
                   params: dict = None) -> dict:

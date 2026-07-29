@@ -19,7 +19,7 @@ Proyek Sync Client mandiri untuk menarik data dari **Backbone API** (Kemendikdas
 
 Proyek ini menarik data dari **Backbone API** dan menyimpannya ke database **SQL Server** atau **PostgreSQL** milik client. Alur singkatnya:
 
-- Membuat *request* akses ke Backbone API, lalu mengambil metadata tabel yang tersedia (`/metadata`).
+- Mengambil **access-token** otomatis (tukar username/password → JWT), lalu membuat *request* akses ke Backbone API, lalu mengambil metadata tabel yang tersedia (`/metadata`).
 - Menarik daftar wilayah akses (kecamatan) client, lalu menarik data tabel `sekolah` per wilayah untuk mendapatkan daftar NPSN.
 - Berdasarkan metadata, tabel-tabel lain ditarik per NPSN (`param_type=npsn`) atau per wilayah (`param_type=wilayah`); tabel referensi (`param_type=ref`) bersifat opsional (diatur oleh `PULL_REF`).
 - Setiap tabel disimpan dengan skema **incremental**: setiap tabel punya *checkpoint* `last_update` (disimpan di skema `sync`, tabel `pull_checkpoint`) sehingga proses berikutnya hanya menarik data yang berubah sejak penarikan terakhir.
@@ -45,7 +45,7 @@ Database tujuan dipilih lewat `DB_DIALECT` (`sqlserver` atau `postgres`); logika
     ```
 
 - Akses ke database tujuan (SQL Server **atau** PostgreSQL) dengan user yang punya hak baca/tulis pada database target (lihat §8 soal hak `CREATE DATABASE`).
-- Kredensial Backbone API: **service JWT** dan **API key** (didapat dari pengelola Backbone/Kemendikdasmen — bukan bagian dari proyek ini).
+- Kredensial akun Backbone API: **username**, **password**, dan **API key** (didapat dari pengelola Backbone/Kemendikdasmen — bukan bagian dari proyek ini). Access-token (JWT) diambil **otomatis** dari username/password di tiap run, jadi tidak perlu menyiapkan atau menempel JWT manual.
 
 ## 3. Langkah Instalasi
 
@@ -56,7 +56,7 @@ cd backbone-client-pull
 uv sync
 
 cp .env.example .env      # Windows: copy .env.example .env
-# edit .env: DB_DIALECT, koneksi DB, BACKBONE_API_KEY, BACKBONE_SERVICE_JWT
+# edit .env: DB_DIALECT, koneksi DB, BACKBONE_API_KEY, BACKBONE_USERNAME, BACKBONE_PASSWORD
 
 uv run python -m backbone_pull.check     # verifikasi koneksi DB & API Backbone
 uv run python main.py --run-once         # uji tarik data sekali, lalu keluar
@@ -83,9 +83,11 @@ Salin `.env.example` menjadi `.env` lalu isi sesuai lingkungan client. Variabel 
 | `DB_NAME`                  | Wajib   | `backbone_client`                                                      | Nama database tujuan; boleh diganti sesuai kebutuhan client.                                                    |
 | `DB_AUTO_CREATE_DATABASE`  | Opsional| `true`                                                                 | Jika `true`, aplikasi mencoba membuat database `DB_NAME` otomatis kalau belum ada. Lihat §8.                    |
 | `DB_MAINTENANCE_DB`        | Opsional| `postgres`                                                             | **Hanya relevan untuk `DB_DIALECT=postgres`** — database maintenance yang dipakai untuk `CREATE DATABASE`. Lihat §8. |
-| `BACKBONE_BASE_URL`        | Opsional| `https://api.data.kemendikdasmen.go.id/svc/satu-data/pendidikan/v3`   | URL dasar Backbone API. Biasanya tidak perlu diubah.                                                             |
-| `BACKBONE_API_KEY`         | Wajib   | *(kosong)*                                                             | API key Backbone milik client.                                                                                  |
-| `BACKBONE_SERVICE_JWT`     | Wajib   | *(kosong)*                                                             | Service JWT Backbone milik client.                                                                              |
+| `BACKBONE_BASE_URL`        | Opsional| `https://api.data.kemendikdasmen.go.id/svc/satu-data/pendidikan/v3`   | URL dasar Backbone API (endpoint data). Biasanya tidak perlu diubah.                                             |
+| `BACKBONE_AUTH_URL`        | Opsional| `https://api.data.kemendikdasmen.go.id/svc/satu-data/auth/v1/access-token` | Endpoint tukar username/password → access-token. Biasanya tidak perlu diubah.                             |
+| `BACKBONE_API_KEY`         | Wajib   | *(kosong)*                                                             | API key Backbone milik client (dikirim sebagai header `X-API-Key` di tiap request data).                        |
+| `BACKBONE_USERNAME`        | Wajib   | *(kosong)*                                                             | Username akun Backbone milik client. Dipakai untuk mengambil access-token otomatis.                             |
+| `BACKBONE_PASSWORD`        | Wajib   | *(kosong)*                                                             | Password akun Backbone milik client. **Jangan pernah commit nilai asli** (lihat §7).                            |
 | `BACKBONE_PER_PAGE`        | Opsional| `500`                                                                  | Jumlah baris per halaman saat memanggil API Backbone.                                                            |
 | `SCHEDULE_CRON`            | Opsional| `0 2 * * *`                                                            | Jadwal cron standar (menit jam tgl bulan hari) untuk `main.py` (tanpa `--run-once`). Default: setiap hari jam 02:00. |
 | `SCHEDULE_TIMEZONE`        | Opsional| `Asia/Jakarta`                                                         | Timezone untuk `SCHEDULE_CRON`.                                                                                  |
@@ -209,7 +211,7 @@ Deployment `backbone-client-pull` beserta seluruh *flow run*, *task run*, log, d
   `.env.example` mengisi `DB_PORT=1433` (port default SQL Server). Jika `DB_DIALECT=postgres`, ubah `DB_PORT` menjadi `5432` (port default PostgreSQL) — atau sesuaikan dengan port kustom server database Anda.
 
 - **`uv run python -m backbone_pull.check` melaporkan `[GAGAL]` pada API Backbone**
-  Biasanya berarti `BACKBONE_API_KEY` dan/atau `BACKBONE_SERVICE_JWT` salah/kedaluwarsa. Pesan error dari Backbone (field `keterangan`) akan ditampilkan langsung di output — periksa kembali nilai di `.env`.
+  Biasanya berarti `BACKBONE_USERNAME`/`BACKBONE_PASSWORD` (gagal ambil access-token) dan/atau `BACKBONE_API_KEY` salah. Output `check` menandai langkah **Token akses** dan **API Backbone** secara terpisah; pesan error dari Backbone (field `keterangan`) ditampilkan langsung — periksa kembali nilai di `.env`.
 
 - **`uv run python -m backbone_pull.check` melaporkan `[GAGAL]` pada koneksi database**
   Periksa `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, dan `DB_NAME`; pastikan server database dapat dijangkau dari mesin client (firewall/network) dan driver terkait (`pymssql` untuk SQL Server, `psycopg2-binary` untuk PostgreSQL) sudah terinstal lewat `uv sync`.

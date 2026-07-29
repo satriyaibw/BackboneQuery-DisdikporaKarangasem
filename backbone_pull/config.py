@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(".") / ".env")
 
 DEFAULT_BASE_URL = "https://api.data.kemendikdasmen.go.id/svc/satu-data/pendidikan/v3"
+DEFAULT_AUTH_URL = "https://api.data.kemendikdasmen.go.id/svc/satu-data/auth/v1/access-token"
 VALID_DIALECTS = ("sqlserver", "postgres")
 
 
@@ -41,8 +42,10 @@ class Settings:
     db_auto_create_database: bool
     db_maintenance_db: str
     backbone_base_url: str
+    backbone_auth_url: str
     backbone_api_key: str
-    backbone_service_jwt: str
+    backbone_username: str
+    backbone_password: str
     backbone_per_page: int
     schedule_cron: str
     schedule_timezone: str
@@ -63,7 +66,8 @@ def load_settings() -> Settings:
         "DB_PASSWORD": os.getenv("DB_PASSWORD"),
         "DB_NAME": os.getenv("DB_NAME"),
         "BACKBONE_API_KEY": os.getenv("BACKBONE_API_KEY"),
-        "BACKBONE_SERVICE_JWT": os.getenv("BACKBONE_SERVICE_JWT"),
+        "BACKBONE_USERNAME": os.getenv("BACKBONE_USERNAME"),
+        "BACKBONE_PASSWORD": os.getenv("BACKBONE_PASSWORD"),
     }
     missing = [k for k, v in required.items() if not v]
     if missing:
@@ -84,8 +88,10 @@ def load_settings() -> Settings:
         db_auto_create_database=_bool("DB_AUTO_CREATE_DATABASE", True),
         db_maintenance_db=os.getenv("DB_MAINTENANCE_DB") or "postgres",
         backbone_base_url=os.getenv("BACKBONE_BASE_URL") or DEFAULT_BASE_URL,
+        backbone_auth_url=os.getenv("BACKBONE_AUTH_URL") or DEFAULT_AUTH_URL,
         backbone_api_key=required["BACKBONE_API_KEY"],
-        backbone_service_jwt=required["BACKBONE_SERVICE_JWT"],
+        backbone_username=required["BACKBONE_USERNAME"],
+        backbone_password=required["BACKBONE_PASSWORD"],
         backbone_per_page=_int("BACKBONE_PER_PAGE", 500),
         schedule_cron=os.getenv("SCHEDULE_CRON") or "0 2 * * *",
         schedule_timezone=os.getenv("SCHEDULE_TIMEZONE") or "Asia/Jakarta",

@@ -12,9 +12,20 @@ from .routing import route_tables
 
 settings = load_settings()
 api = BackboneAPI(settings.backbone_base_url, settings.backbone_api_key,
-                  settings.backbone_service_jwt)
+                  settings.backbone_auth_url, settings.backbone_username,
+                  settings.backbone_password)
 db = get_adapter(settings)
 PER_PAGE = settings.backbone_per_page
+
+
+@task(name="backbone-get-token", log_prints=True, retries=2, retry_delay_seconds=10)
+async def get_access_token():
+    """Tukar username/password → access-token, dipakai untuk semua request run ini."""
+    logger = get_run_logger()
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        await api.fetch_token(session)
+    logger.info("Access token diperoleh.")
 
 
 @task(name="backbone-prepare-infrastructure", log_prints=True)
@@ -235,6 +246,7 @@ async def backbone_client_pull():
     logger = get_run_logger()
     logger.info(f"▶ Mulai penarikan data Backbone — {datetime.now():%Y-%m-%d %H:%M}")
     prepare_infrastructure()
+    await get_access_token()
     await create_request()
     tables = await get_metadata()
     if not tables:
