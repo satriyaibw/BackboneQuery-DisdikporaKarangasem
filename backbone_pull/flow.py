@@ -102,9 +102,10 @@ async def create_request():
 
 @task(name="backbone-get-metadata", log_prints=True, retries=2, retry_delay_seconds=5)
 async def get_metadata() -> Dict[str, dict]:
+    logger = get_run_logger()
     timeout = aiohttp.ClientTimeout(total=30)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        result = await api.get(session, "/metadata")
+        result = await api.get(session, "/metadata", logger=logger, label="metadata")
     tables: Dict[str, dict] = {}
     for col in result.get("data", []):
         tbl = col["tbl_name"]
@@ -134,11 +135,13 @@ def ensure_target_tables(tables: Dict[str, dict]):
 
 @task(name="backbone-get-wilayah", log_prints=True, retries=2, retry_delay_seconds=5)
 async def get_wilayah_list() -> List[str]:
+    logger = get_run_logger()
     timeout = aiohttp.ClientTimeout(total=30)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        result = await api.get(session, "/wilayah-akses-kecamatan")
+        result = await api.get(session, "/wilayah-akses-kecamatan",
+                               logger=logger, label="wilayah-akses-kecamatan")
     kode_list = [row["kode_wilayah"].strip() for row in result.get("data", [])]
-    get_run_logger().info(f"Wilayah akses: {len(kode_list)} kecamatan")
+    logger.info(f"Wilayah akses: {len(kode_list)} kecamatan")
     return kode_list
 
 
