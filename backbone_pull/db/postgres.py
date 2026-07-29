@@ -188,3 +188,55 @@ class PostgresAdapter(DatabaseAdapter):
                 f'SELECT npsn FROM "{schema_name}"."{tbl_name}" WHERE npsn IS NOT NULL'
             )).fetchall()
         return [r[0] for r in rows if r[0]]
+
+    # ── dead-letter ─────────────────────────────────────────────────────────
+    def ensure_failures_table(self):
+        self.ensure_schema(self.schema_ctrl)
+        with self._engine.begin() as conn:
+            conn.execute(text(
+                f'CREATE TABLE IF NOT EXISTS "{self.schema_ctrl}"."pull_failures" ('
+                '  tbl_name varchar(100) NOT NULL,'
+                '  param_type varchar(20) NOT NULL,'
+                '  entity_id varchar(50) NOT NULL,'
+                '  reason varchar(20) NOT NULL,'
+                '  detail varchar(500) NULL,'
+                '  expected bigint NULL,'
+                '  received bigint NULL,'
+                '  attempts int NOT NULL DEFAULT 1,'
+                '  failed_at timestamp NOT NULL DEFAULT NOW(),'
+                '  CONSTRAINT "PK_pull_failures" PRIMARY KEY (tbl_name, param_type, entity_id));'
+            ))
+
+    def record_failure(self, tbl_name, param_type, entity_id, reason, detail, expected, received):
+        with self._engine.begin() as conn:
+            conn.execute(text(
+                f'INSERT INTO "{self.schema_ctrl}"."pull_failures" '
+                "(tbl_name, param_type, entity_id, reason, detail, expected, received) "
+                "VALUES (:tbl, :pt, :ent, :reason, :detail, :expected, :received) "
+                "ON CONFLICT (tbl_name, param_type, entity_id) DO UPDATE SET "
+                "reason = EXCLUDED.reason, detail = EXCLUDED.detail, expected = EXCLUDED.expected, "
+                'received = EXCLUDED.received, attempts = "pull_failures".attempts + 1, failed_at = NOW()'
+            ), {"tbl": tbl_name, "pt": param_type, "ent": entity_id or "",
+                "reason": reason, "detail": (detail or "")[:500],
+                "expected": expected, "received": received})
+
+    def clear_failure(self, tbl_name, param_type, entity_id):
+        with self._engine.begin() as conn:
+            conn.execute(text(
+                f'DELETE FROM "{self.schema_ctrl}"."pull_failures" '
+                "WHERE tbl_name = :tbl AND param_type = :pt AND entity_id = :ent"
+            ), {"tbl": tbl_name, "pt": param_type, "ent": entity_id or ""})
+
+    def list_failures(self) -> List[dict]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(text(
+                f'SELECT tbl_name, param_type, entity_id, reason, detail, expected, received, attempts '
+                f'FROM "{self.schema_ctrl}"."pull_failures"'
+            )).mappings().all()
+        return [dict(r) for r in rows]
+
+    def count_failures(self) -> int:
+        with self._engine.connect() as conn:
+            return conn.execute(text(
+                f'SELECT COUNT(*) FROM "{self.schema_ctrl}"."pull_failures"'
+            )).scalar() or 0

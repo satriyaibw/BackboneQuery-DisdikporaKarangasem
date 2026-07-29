@@ -70,6 +70,23 @@ class DatabaseAdapter(ABC):
     @abstractmethod
     def fetch_existing_npsn(self, schema_name: str, tbl_name: str) -> List[str]: ...
 
+    # ── dead-letter: item penarikan yang gagal / tidak lengkap ─────────────
+    @abstractmethod
+    def ensure_failures_table(self): ...
+
+    @abstractmethod
+    def record_failure(self, tbl_name: str, param_type: str, entity_id: str,
+                       reason: str, detail: str, expected, received): ...
+
+    @abstractmethod
+    def clear_failure(self, tbl_name: str, param_type: str, entity_id: str): ...
+
+    @abstractmethod
+    def list_failures(self) -> List[dict]: ...
+
+    @abstractmethod
+    def count_failures(self) -> int: ...
+
     # ── konversi nilai (bersama) ───────────────────────────────────────────
     @staticmethod
     def coerce_value(value, type_name: str):
