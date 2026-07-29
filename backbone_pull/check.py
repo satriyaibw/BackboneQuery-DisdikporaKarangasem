@@ -20,6 +20,8 @@ async def _check_api(api: BackboneAPI) -> bool:
     timeout = aiohttp.ClientTimeout(total=30)
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
+            await api.fetch_token(session)
+            _ok("Token akses Backbone")
             async with session.post(f"{api.base_url}/user-info/request",
                                     headers=api.headers) as resp:
                 resp.raise_for_status()
@@ -41,6 +43,8 @@ def main():
     print(f"  Dialect   : {s.db_dialect}")
     print(f"  DB        : {s.db_user}@{s.db_host}:{s.db_port}/{s.db_name}")
     print(f"  Base URL  : {s.backbone_base_url}")
+    print(f"  Auth URL  : {s.backbone_auth_url}")
+    print(f"  User API  : {s.backbone_username}")
     print("=== Uji Koneksi ===")
 
     db = get_adapter(s)
@@ -53,7 +57,8 @@ def main():
     except Exception as e:  # noqa: BLE001
         _fail("Koneksi database", e)
 
-    api = BackboneAPI(s.backbone_base_url, s.backbone_api_key, s.backbone_service_jwt)
+    api = BackboneAPI(s.backbone_base_url, s.backbone_api_key, s.backbone_auth_url,
+                      s.backbone_username, s.backbone_password)
     api_ok = asyncio.run(_check_api(api))
 
     print("=== Ringkasan ===")
