@@ -10,7 +10,8 @@ BASE_ENV = {
 def _set(monkeypatch, env):
     for k in ("DB_DIALECT","DB_HOST","DB_PORT","DB_USER","DB_PASSWORD","DB_NAME",
               "BACKBONE_API_KEY","BACKBONE_USERNAME","BACKBONE_PASSWORD","BACKBONE_AUTH_URL",
-              "DB_AUTO_CREATE_DATABASE","BACKBONE_PER_PAGE","PULL_REF"):
+              "DB_AUTO_CREATE_DATABASE","BACKBONE_PER_PAGE","BACKBONE_RATE_LIMIT",
+              "BACKBONE_CONCURRENCY","PULL_REF"):
         monkeypatch.delenv(k, raising=False)
     for k, v in env.items():
         monkeypatch.setenv(k, v)
@@ -26,6 +27,8 @@ def test_loads_and_types(monkeypatch):
     assert s.pull_ref is False
     assert s.backbone_username == "user"
     assert s.backbone_password == "pass"
+    assert s.backbone_rate_limit == 20.0  # default
+    assert s.backbone_concurrency == 16    # default
     # default base & auth url terisi walau env kosong
     assert s.backbone_base_url.startswith("https://")
     assert s.backbone_auth_url.startswith("https://") and "access-token" in s.backbone_auth_url
