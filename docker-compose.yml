@@ -34,6 +34,12 @@ services:
       PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:prefect@database:5432/prefect
       # Bind ke semua interface agar UI/API dapat diakses dari host.
       PREFECT_SERVER_API_HOST: 0.0.0.0
+      # Retensi otomatis: Prefect Server TIDAK membersihkan flow run/log secara
+      # default (hanya "events" yang divacuum bawaan). Aktifkan "flow_runs" agar
+      # flow run + log-nya yang lebih lama dari retensi berikut dihapus otomatis
+      # (berjalan tiap jam) — disamakan ~2 bulan dengan PULL_LOG_RETENTION_DAYS.
+      PREFECT_SERVER_SERVICES_DB_VACUUM_ENABLED: "events,flow_runs"
+      PREFECT_SERVER_SERVICES_DB_VACUUM_RETENTION_PERIOD: "5184000"  # 60 hari (detik)
     command: prefect server start --host 0.0.0.0
     ports:
       - "4200:4200"
