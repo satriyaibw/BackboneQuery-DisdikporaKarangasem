@@ -1,8 +1,11 @@
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseAdapter(ABC):
@@ -42,7 +45,9 @@ class DatabaseAdapter(ABC):
     def build_insert_sql(self, tbl_name, cols, schema_name, col_to_param) -> str: ...
 
     @abstractmethod
-    def existing_columns(self, conn, schema_name, tbl_name) -> set: ...
+    def existing_columns(self, conn, schema_name, tbl_name) -> set:
+        """Kembalikan set nama kolom (huruf kecil) yang sudah ada di tabel."""
+        ...
 
     @abstractmethod
     def ensure_database(self): ...
@@ -76,21 +81,21 @@ class DatabaseAdapter(ABC):
                 try:
                     return datetime.fromisoformat(value)
                 except (ValueError, TypeError):
-                    pass
+                    logger.debug("coerce_value: gagal konversi %r ke tipe '%s', pakai nilai asli", value, tn)
             return value
         if tn in ("int", "bigint", "smallint", "tinyint", "bit"):
             if isinstance(value, str):
                 try:
                     return int(float(value))
                 except (ValueError, TypeError):
-                    pass
+                    logger.debug("coerce_value: gagal konversi %r ke tipe '%s', pakai nilai asli", value, tn)
             return value
         if tn in ("decimal", "numeric", "float", "real", "money", "smallmoney"):
             if isinstance(value, str):
                 try:
                     return float(value)
                 except (ValueError, TypeError):
-                    pass
+                    logger.debug("coerce_value: gagal konversi %r ke tipe '%s', pakai nilai asli", value, tn)
             return value
         return value
 
