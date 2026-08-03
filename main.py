@@ -8,12 +8,14 @@ load_dotenv()
 import argparse  # noqa: E402
 import asyncio  # noqa: E402
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from prefect.schedules import Cron  # noqa: E402
 
 from backbone_pull.config import load_settings  # noqa: E402
 from backbone_pull.flow import backbone_client_pull  # noqa: E402
+from backbone_pull.scheduler import next_run_time  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -21,47 +23,51 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--run-once", action="store_true",
                    help="Jalankan flow sekali lalu keluar (tanpa scheduler).")
     p.add_argument("--loop", action="store_true",
-                   help="Jalankan flow dalam loop terus-menerus.")
-    p.add_argument("--interval", type=int, default=3600,
-                   help="Jeda waktu loop dalam detik (default: 3600 detik / 1 jam).")
+                   help="Jalankan flow berulang sesuai SCHEDULE_CRON/SCHEDULE_TIMEZONE "
+                        "di .env, tanpa perlu Prefect Server (cocok utk NSSM/service biasa).")
     return p
 
-def get_seconds_until_next_run(target_hour: int = 2) -> float:
-    """Menghitung sisa detik sampai jam target berikutnya."""
-    now = datetime.now()
-    target_time = now.replace(hour=target_hour, minute=0, second=0, microsecond=0)
 
-    # Jika jam 02:00 hari ini sudah lewat, set target ke jam 02:00 besok
-    if now >= target_time:
-        target_time += timedelta(days=1)
+def run_loop(s):
+    """Loop internal: hitung jadwal berikutnya (SCHEDULE_CRON/SCHEDULE_TIMEZONE),
+    tunggu sampai jadwal itu tiba, jalankan flow, ulangi. Jadwal yang terlewat
+    (mis. komputer mati) otomatis dilewati — tunggu kejadian berikutnya, bukan
+    langsung dieksekusi saat proses baru start."""
+    tz = ZoneInfo(s.schedule_timezone)
+    # flush=True wajib: saat stdout diarahkan ke file (mis. NSSM AppStdout, §5.1),
+    # Python memakai block-buffering, bukan line-buffering — tanpa flush, pesan
+    # bisa tertahan di buffer dan tidak muncul di file log secara realtime.
+    print(f"Mode loop internal aktif — jadwal '{s.schedule_cron}' ({s.schedule_timezone}). "
+          "Tidak perlu Prefect Server.", flush=True)
+    while True:
+        now = datetime.now(tz)
+        nxt = next_run_time(s.schedule_cron, s.schedule_timezone, now)
+        wait_seconds = (nxt - now).total_seconds()
+        print(f"[*] Menunggu... eksekusi berikutnya pada: {nxt:%Y-%m-%d %H:%M:%S %Z} "
+              f"({wait_seconds:.0f} detik lagi)", flush=True)
+        time.sleep(max(wait_seconds, 0))
 
-    return (target_time - now).total_seconds()
+        print(f"\n[{datetime.now(tz):%Y-%m-%d %H:%M:%S}] Eksekusi dimulai...", flush=True)
+        try:
+            asyncio.run(backbone_client_pull())
+            print("Eksekusi selesai.\n", flush=True)
+        except Exception as e:  # noqa: BLE001
+            # Jangan biarkan satu kegagalan menghentikan proses — lanjut ke jadwal berikutnya.
+            print(f"Eksekusi GAGAL: {e}\n", flush=True)
+
 
 def main():
     args = build_parser().parse_args()
+    s = load_settings()
 
-    # 1. Mode Run Once
     if args.run_once:
         asyncio.run(backbone_client_pull())
         return
 
-    # 2. Mode Loop (Khusus Jam 02:00)
     if args.loop:
-        print("Mode Loop aktif: Program akan berjalan otomatis setiap jam 02:00.")
-        while True:
-            print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Eksekusi dimulaii...")
-            asyncio.run(backbone_client_pull())
-            print("Eksekusi selesai.\n")
+        run_loop(s)
+        return
 
-            # Hitung jeda waktu menuju jam 02:00 berikutnya
-            sleep_seconds = get_seconds_until_next_run(target_hour=2)
-            next_run = datetime.now() + timedelta(seconds=sleep_seconds)
-            
-            print(f"[*] Menunggu... Eksekusi berikutnya pada: {next_run.strftime('%Y-%m-%d %H:%M:%S')}")
-            time.sleep(sleep_seconds)
-
-    # 3. Mode Default (Prefect Serve)
-    s = load_settings()
     backbone_client_pull.serve(
         name=s.deployment_name,
         schedule=Cron(s.schedule_cron, timezone=s.schedule_timezone),
