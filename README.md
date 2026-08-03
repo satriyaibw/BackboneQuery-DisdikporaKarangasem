@@ -109,14 +109,34 @@ Untuk produksi, jalankan `uv run python main.py` (mode `serve`, bukan `--run-onc
 > ⚠️ **Penting — `SCHEDULE_CRON` TIDAK otomatis berjalan tanpa Prefect Server.**
 > Proses `main.py` (mode `serve`) hanya **mem-poll run yang sudah dijadwalkan oleh server** — ia tidak mengevaluasi cron sendiri secara lokal. Dalam mode ringan/*ephemeral* (default, `PREFECT_API_URL` nonaktif), tidak ada layanan penjadwal yang berjalan, sehingga run terjadwal **tidak pernah otomatis terpicu** — proses hanya diam menunggu (akan terlihat warning `Cannot schedule flows on an ephemeral server` di log). Pilih salah satu **sebelum** memasang service produksi di bawah:
 >
-> - **Opsi A — pakai Prefect Server (rekomendasi bila ingin jadwal otomatis via Prefect):** aktifkan dulu (`docker compose up -d` + set `PREFECT_API_URL` di `.env`, lihat §6), baru pasang service `serve` di bawah. Scheduler sungguhan akan memicu run sesuai `SCHEDULE_CRON`, riwayatnya terlihat di Prefect UI.
-> - **Opsi B — tanpa Prefect Server:** jangan andalkan `SCHEDULE_CRON`/mode `serve`. Jadwalkan `uv run python main.py --run-once` (sekali jalan lalu keluar) lewat **penjadwal OS** — lihat §5.1 di bawah.
+> - **Opsi A — Prefect Server:** aktifkan dulu (`docker compose up -d` + set `PREFECT_API_URL` di `.env`, lihat §6), baru pasang service **mode `serve`** (tanpa argumen) di §5.3/§5.4. Scheduler sungguhan Prefect memicu run sesuai `SCHEDULE_CRON`, riwayatnya terlihat di Prefect UI.
+> - **Opsi B — mode `--loop` (rekomendasi bila tidak butuh Prefect UI):** pasang service yang menjalankan `main.py --loop` (§5.3/§5.4, tinggal ganti argumen) — **tidak perlu Prefect Server sama sekali**. Aplikasi menghitung sendiri jadwal berikutnya dari `SCHEDULE_CRON`/`SCHEDULE_TIMEZONE`; lihat detail di §5.1.
+> - **Opsi C — penjadwal OS:** jangan jalankan `main.py` sebagai service jangka panjang sama sekali. Jadwalkan `uv run python main.py --run-once` (sekali jalan lalu keluar) lewat **penjadwal OS** — lihat §5.2.
 >
-> Memicu run manual kapan saja (kedua opsi): `uv run python main.py --run-once`, atau (bila `serve` sedang berjalan & tersambung Prefect Server) `prefect deployment run 'backbone-client-pull/backbone-client-pull'`.
+> Memicu run manual kapan saja (semua opsi): `uv run python main.py --run-once`. (Khusus Opsi A yang sedang tersambung Prefect Server, bisa juga lewat `prefect deployment run 'backbone-client-pull/backbone-client-pull'`.)
 
-### 5.1 Alternatif tanpa Prefect Server: jadwal via OS (Opsi B)
+### 5.1 Mode `--loop`: jadwal internal tanpa Prefect Server (Opsi B)
 
-Jalankan `uv run python main.py --run-once` langsung lewat penjadwal bawaan OS — tanpa `serve`, tanpa Prefect Server, tanpa NSSM/systemd (§5.2/§5.3 di bawah tidak diperlukan untuk opsi ini).
+`uv run python main.py --loop` menjalankan proses jangka panjang yang **menghitung sendiri** jadwal berikutnya dari `SCHEDULE_CRON`/`SCHEDULE_TIMEZONE` di `.env` (pakai library `croniter`) — mendukung ekspresi cron apa pun (bukan cuma jam tetap), dan **tidak memerlukan Prefect Server/Docker sama sekali**. Cocok dipasang sebagai service biasa (NSSM/systemd, §5.3/§5.4) tanpa menambah infrastruktur.
+
+Perilakunya:
+- Saat start, **menunggu sampai jadwal berikutnya tiba** dulu (tidak langsung menarik data begitu proses dimulai/di-restart).
+- Jadwal yang **terlewat** (mis. komputer/VM mati saat melewati jam terjadwal) otomatis **dilewati** — begitu proses nyala lagi, ia menunggu ke kejadian berikutnya, bukan langsung menyusulkan run yang terlewat.
+- Bila satu siklus penarikan **gagal** (mis. error API/DB), proses **tidak berhenti** — kegagalan dicatat ke log lalu loop lanjut menunggu jadwal berikutnya seperti biasa.
+- Output berupa `print()` biasa (bukan lewat Prefect) — pastikan `flush`-nya tidak tertahan buffer saat diarahkan ke file log (lihat catatan `AppStdout` di §5.4 untuk NSSM; di Linux/systemd otomatis masuk `journalctl` tanpa perlu pengaturan tambahan).
+
+Contoh log:
+```
+Mode loop internal aktif — jadwal '0 2 * * *' (Asia/Jakarta). Tidak perlu Prefect Server.
+[*] Menunggu... eksekusi berikutnya pada: 2026-08-04 02:00:00 WIB (31245 detik lagi)
+
+[2026-08-04 02:00:00] Eksekusi dimulai...
+Eksekusi selesai.
+```
+
+### 5.2 Opsi C — penjadwal OS (tanpa service jangka panjang)
+
+Jalankan `uv run python main.py --run-once` langsung lewat penjadwal bawaan OS — tanpa `serve`/`--loop`, tanpa Prefect Server, tanpa NSSM/systemd (§5.3/§5.4 di bawah tidak diperlukan untuk opsi ini).
 
 **Windows (Task Scheduler):**
 1. Buka **Task Scheduler** (`taskschd.msc`) → **Create Basic Task**.
@@ -136,13 +156,13 @@ Tambahkan (sesuaikan path & jadwal):
 0 2 * * * cd /opt/backbone-client-pull && /usr/bin/env uv run python main.py --run-once >> logs/cron.log 2>&1
 ```
 
-### 5.2 systemd (Linux) — untuk Opsi A (mode `serve`)
+### 5.3 systemd (Linux) — untuk Opsi A atau Opsi B
 
 Buat file `/etc/systemd/system/backbone-client-pull.service`:
 
 ```ini
 [Unit]
-Description=Backbone Client Pull (Prefect serve)
+Description=Backbone Client Pull
 After=network-online.target
 
 [Service]
@@ -157,6 +177,10 @@ WantedBy=multi-user.target
 
 Sesuaikan `WorkingDirectory` dengan lokasi instalasi proyek (folder yang berisi `main.py`, `.env`, dan `.venv/` hasil `uv sync`), dan `User` dengan user sistem yang menjalankan service (pastikan user tersebut punya akses baca ke folder proyek dan `.env`).
 
+**Pilih `ExecStart` sesuai opsi jadwal (lihat peringatan di atas):**
+- **Opsi A** (Prefect Server aktif): `ExecStart=/usr/bin/env uv run python main.py` (tanpa argumen — mode `serve`, seperti contoh di atas).
+- **Opsi B** (`--loop`, tanpa Prefect Server): `ExecStart=/usr/bin/env uv run python main.py --loop`.
+
 Aktifkan dan jalankan:
 
 ```bash
@@ -166,7 +190,7 @@ sudo systemctl enable --now backbone-client-pull
 
 Cek status/log dengan `systemctl status backbone-client-pull` dan `journalctl -u backbone-client-pull -f`.
 
-### 5.3 NSSM (Windows) — untuk Opsi A (mode `serve`)
+### 5.4 NSSM (Windows) — untuk Opsi A atau Opsi B
 
 [NSSM](https://nssm.cc/) membungkus proses biasa menjadi Windows Service.
 
@@ -176,7 +200,7 @@ Cek status/log dengan `systemctl status backbone-client-pull` dan `journalctl -u
    ```
 2. Pada dialog NSSM yang terbuka, isi:
    - **Application path**: `uv` (atau path lengkap ke `uv.exe`, mis. hasil `where uv`)
-   - **Arguments**: `run python main.py`
+   - **Arguments**: `run python main.py` (**Opsi A**, Prefect Server aktif) **atau** `run python main.py --loop` (**Opsi B**, tanpa Prefect Server — lihat §5.1)
    - **Startup directory**: path folder proyek (folder yang berisi `main.py` dan `.env`)
 3. Klik **Install service**.
 4. Jalankan service: `nssm start BackboneClientPull` (atau lewat `services.msc`).
