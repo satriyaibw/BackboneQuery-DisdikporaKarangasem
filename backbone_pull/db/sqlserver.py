@@ -9,7 +9,10 @@ from .base import DatabaseAdapter
 class SqlServerAdapter(DatabaseAdapter):
     def __init__(self, settings):
         super().__init__(settings)
-        s = settings
+        self._build_engines()
+
+    def _build_engines(self):
+        s = self.settings
         self._engine = create_engine(
             URL.create("mssql+pymssql", username=s.db_user, password=s.db_password,
                        host=s.db_host, port=s.db_port, database=s.db_name),

@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import text
+from sqlalchemy.engine import Engine
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,23 @@ class DatabaseAdapter(ABC):
     def __init__(self, settings):
         self.settings = settings
         self.schema_ctrl = "sync"
+
+    def __getstate__(self):
+        """Buang engine SQLAlchemy saat di-pickle. Engine memegang lock native
+        (_thread.RLock) yang tidak bisa diserialisasi — ini dibutuhkan Prefect
+        saat mengirim flow ke subprocess terpisah (flow.serve() + Prefect Server).
+        Dibangun ulang di __setstate__ via _build_engines()."""
+        return {k: v for k, v in self.__dict__.items() if not isinstance(v, Engine)}
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._build_engines()
+
+    @abstractmethod
+    def _build_engines(self):
+        """Buat/bangun ulang engine SQLAlchemy dari self.settings. Dipanggil
+        dari __init__ dan __setstate__ (setelah unpickle)."""
+        ...
 
     # ── dialect primitives (abstrak) ───────────────────────────────────────
     @property
