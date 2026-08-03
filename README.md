@@ -267,6 +267,28 @@ Deployment `backbone-client-pull` beserta seluruh *flow run*, *task run*, log, d
 >
 > **Alternatif Prefect Cloud:** daripada server self-hosted, Anda bisa memakai [Prefect Cloud](https://app.prefect.cloud) — jalankan `uv run prefect cloud login`, atau isi `PREFECT_API_URL` (URL API workspace Cloud) dan `PREFECT_API_KEY` di `.env`. Metadata *run* akan terkirim ke Cloud — pertimbangkan kebijakan data sebelum memakainya.
 
+### 6.3 Akses dari komputer lain di jaringan (LAN)
+
+Secara default, `docker-compose.yml` sudah membuka port 4200 ke semua interface (`PREFECT_SERVER_API_HOST: 0.0.0.0`) — jadi **secara jaringan**, komputer lain di LAN yang sama sudah bisa mencapai `http://<IP-server>:4200`. Tapi ada satu langkah lagi yang **wajib** supaya UI benar-benar berfungsi saat dibuka dari komputer lain (bukan cuma halamannya termuat, tapi datanya juga tampil):
+
+**Kenapa perlu:** saat browser memuat Prefect UI, ia meminta konfigurasi runtime ke `/ui-settings` untuk tahu alamat API yang harus dipanggil. Tanpa pengaturan tambahan, alamat itu default ke `http://0.0.0.0:4200/api` — alamat yang **tidak valid** dipanggil dari komputer manapun (termasuk dari server itu sendiri, kecuali kebetulan). Akibatnya: halaman UI termuat, tapi gagal menampilkan data run/log (error koneksi API di browser).
+
+**Langkah:**
+1. Cek IP atau hostname server (dari server itu sendiri):
+   - Windows (PowerShell): `ipconfig` (lihat `IPv4 Address` di adapter jaringan aktif)
+   - Linux/macOS: `hostname -I` atau `ip addr show`
+2. Di `docker-compose.yml`, isi baris `PREFECT_SERVER_UI_API_URL` (hapus tanda `#` di depannya) dengan IP/hostname tersebut:
+   ```yaml
+   PREFECT_SERVER_UI_API_URL: http://192.168.1.50:4200/api
+   ```
+3. Terapkan ulang: `docker compose up -d` (container di-recreate agar env baru terbaca).
+4. Dari komputer lain di jaringan yang sama, buka `http://192.168.1.50:4200` di browser.
+
+**Catatan:**
+- Ini pengaturan **statis** — setelah diisi, *semua* pengakses (termasuk dari server itu sendiri lewat `127.0.0.1`) akan diarahkan memanggil API di alamat yang sama itu (biasanya tetap berfungsi normal, karena IP tersebut memang bisa dijangkau dari server itu sendiri juga).
+- **Firewall**: pastikan port `4200` diizinkan menerima koneksi masuk dari jaringan lokal (Windows Defender Firewall / `ufw` di Linux) — bukan cuma dari `localhost`.
+- **Keamanan:** Prefect Server **tidak punya autentikasi bawaan** — siapa pun yang bisa menjangkau port 4200 dapat melihat *dan mengendalikan* semua run. Batasi hanya ke jaringan lokal tepercaya. Jangan expose port ini ke internet; untuk akses dari luar jaringan lokal, gunakan VPN atau reverse-proxy dengan autentikasi, bukan expose langsung.
+
 ## 7. Troubleshooting
 
 - **Gagal membuat database otomatis / error hak akses (`CREATE DATABASE`)**

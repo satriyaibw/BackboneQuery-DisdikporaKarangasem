@@ -34,6 +34,12 @@ services:
       PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:prefect@database:5432/prefect
       # Bind ke semua interface agar UI/API dapat diakses dari host.
       PREFECT_SERVER_API_HOST: 0.0.0.0
+      # Untuk akses dari KOMPUTER LAIN di jaringan yang sama (bukan cuma dari
+      # server ini sendiri): isi dengan IP/hostname server ini (lihat README §6.3
+      # cara mengeceknya), lalu jalankan `docker compose up -d` lagi agar terbaca.
+      # Tanpa ini, UI yang dibuka dari komputer lain akan gagal terhubung ke API
+      # (browser diarahkan ke alamat yang cuma valid dari server sendiri).
+      # PREFECT_SERVER_UI_API_URL: http://<IP-ATAU-HOSTNAME-SERVER>:4200/api
       # Retensi otomatis: Prefect Server TIDAK membersihkan flow run/log secara
       # default (hanya "events" yang divacuum bawaan). Aktifkan "flow_runs" agar
       # flow run + log-nya yang lebih lama dari retensi berikut dihapus otomatis
