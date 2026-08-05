@@ -119,6 +119,14 @@ class DatabaseAdapter(ABC):
         """Hapus baris pull_log lebih tua dari retention_days; kembalikan jumlah baris dihapus."""
         ...
 
+    @abstractmethod
+    def update_pull_log(self, tbl_name: str, param_type: str, run_started_at: datetime,
+                        rows_received: int, entities_failed: int):
+        """Perbarui baris pull_log (dikenali dari tbl_name+param_type+run_started_at)
+        dengan hasil AKHIR setelah retry_failed — supaya status mencerminkan
+        kondisi sebenarnya di akhir run, bukan snapshot sebelum retry."""
+        ...
+
     # ── konversi nilai (bersama) ───────────────────────────────────────────
     @staticmethod
     def coerce_value(value, type_name: str):
