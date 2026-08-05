@@ -283,3 +283,13 @@ class PostgresAdapter(DatabaseAdapter):
                 "WHERE run_started_at < NOW() - make_interval(days => :days)"
             ), {"days": retention_days})
             return result.rowcount or 0
+
+    def update_pull_log(self, tbl_name, param_type, run_started_at, rows_received, entities_failed):
+        status = "ok" if entities_failed == 0 else "incomplete"
+        with self._engine.begin() as conn:
+            conn.execute(text(
+                f'UPDATE "{self.schema_ctrl}"."pull_log" '
+                "SET rows_received = :rows, entities_failed = :efail, status = :status "
+                "WHERE tbl_name = :tbl AND param_type = :pt AND run_started_at = :started"
+            ), {"rows": rows_received, "efail": entities_failed, "status": status,
+                "tbl": tbl_name, "pt": param_type, "started": run_started_at})

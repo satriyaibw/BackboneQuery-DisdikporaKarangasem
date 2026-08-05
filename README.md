@@ -344,6 +344,6 @@ ORDER BY run_started_at DESC;
 ```
 
 - Satu baris per **tabel per run** (bukan per NPSN/kecamatan/halaman), jadi volumenya kecil (maks puluhan–ratusan baris per run) dan tidak berdampak ke kecepatan penarikan.
-- `status` = `ok` bila semua entity untuk tabel itu lengkap; `incomplete` bila ada yang gagal (lihat detailnya di `sync.pull_failures`).
+- `status` mencerminkan hasil **akhir** run (setelah pemulihan otomatis di bawah), bukan sekadar percobaan pertama: `ok` bila semua entity untuk tabel itu akhirnya lengkap; `incomplete` bila masih ada yang gagal sampai akhir run (lihat detailnya di `sync.pull_failures`). Baris ditulis sesaat setelah tabel itu ditarik, lalu **diperbarui otomatis** di akhir run begitu proses pemulihan (di bawah) selesai — jadi kalau suatu entity sempat gagal lalu berhasil dipulihkan pada run yang sama, `status`-nya akan berubah dari `incomplete` menjadi `ok` tanpa perlu tindakan manual.
 - Baris lebih tua dari `PULL_LOG_RETENTION_DAYS` hari (default **60 hari**, ±2 bulan) **dihapus otomatis** di awal tiap run — tidak perlu pembersihan manual.
 - Detail per akses endpoint (tiap request HTTP) tetap tersedia di log Prefect/terminal (lihat `journalctl -u backbone-client-pull` bila dijalankan sebagai service, §5) — `sync.pull_log` hanya menyimpan ringkasannya agar hemat & cepat.

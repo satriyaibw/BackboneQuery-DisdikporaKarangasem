@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import aiohttp
 from prefect import flow, task
@@ -150,7 +150,7 @@ async def get_wilayah_list() -> List[str]:
 
 
 @task(name="backbone-pull-sekolah", log_prints=True, retries=2, retry_delay_seconds=10)
-async def pull_sekolah(kode_wilayah_list: List[str], meta: dict) -> List[str]:
+async def pull_sekolah(kode_wilayah_list: List[str], meta: dict) -> Tuple[List[str], dict]:
     logger = get_run_logger()
     last_update = db.get_last_update("sekolah")
     schema_name = meta.get("schema_name", "dbo")
@@ -195,11 +195,13 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict) -> List[str]:
     db.log_pull_summary("sekolah", "wilayah", started_at, datetime.now(),
                         total, len(kode_wilayah_list), failed)
     logger.info(f"Sekolah: {len(npsn_list)} NPSN total")
-    return npsn_list
+    stats = {"tbl_name": "sekolah", "param_type": "wilayah", "run_started_at": started_at,
+             "rows_received": total, "entities_failed": failed}
+    return npsn_list, stats
 
 
 @task(name="backbone-pull-npsn", log_prints=True, retries=2, retry_delay_seconds=10)
-async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict):
+async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict) -> dict:
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
     started_at = datetime.now()
@@ -232,10 +234,12 @@ async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict):
     db.log_pull_summary(tbl_name, "npsn", started_at, datetime.now(),
                         total, len(npsn_list), failed)
     logger.info(f"{tbl_name}: {total} baris diproses")
+    return {"tbl_name": tbl_name, "param_type": "npsn", "run_started_at": started_at,
+            "rows_received": total, "entities_failed": failed}
 
 
 @task(name="backbone-pull-wilayah", log_prints=True, retries=2, retry_delay_seconds=10)
-async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dict):
+async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dict) -> dict:
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
     started_at = datetime.now()
@@ -268,10 +272,12 @@ async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dic
     db.log_pull_summary(tbl_name, "wilayah", started_at, datetime.now(),
                         total, len(kode_wilayah_list), failed)
     logger.info(f"{tbl_name}: {total} baris diproses")
+    return {"tbl_name": tbl_name, "param_type": "wilayah", "run_started_at": started_at,
+            "rows_received": total, "entities_failed": failed}
 
 
 @task(name="backbone-pull-ref", log_prints=True, retries=2, retry_delay_seconds=10)
-async def pull_ref(tbl_name: str, meta: dict):
+async def pull_ref(tbl_name: str, meta: dict) -> dict:
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
     started_at = datetime.now()
@@ -291,15 +297,20 @@ async def pull_ref(tbl_name: str, meta: dict):
     db.log_pull_summary(tbl_name, "ref", started_at, datetime.now(),
                         res.received, 1, 0 if res.ok else 1)
     logger.info(f"{tbl_name}: {res.received} baris diproses")
+    return {"tbl_name": tbl_name, "param_type": "ref", "run_started_at": started_at,
+            "rows_received": res.received, "entities_failed": 0 if res.ok else 1}
 
 
 @task(name="backbone-retry-failed", log_prints=True)
-async def retry_failed(tables: Dict[str, dict]):
-    """Coba ulang item di dead-letter — full pull (tanpa filter last_update) agar lengkap."""
+async def retry_failed(tables: Dict[str, dict]) -> Dict[str, int]:
+    """Coba ulang item di dead-letter — full pull (tanpa filter last_update) agar lengkap.
+    Kembalikan tambahan baris yang pulih per tabel (dipakai flow utama untuk
+    memperbarui pull_log agar status mencerminkan hasil AKHIR setelah retry)."""
     logger = get_run_logger()
+    recovered_rows: Dict[str, int] = {}
     failures = db.list_failures()
     if not failures:
-        return
+        return recovered_rows
     logger.info(f"Retry {len(failures)} item gagal (full pull, tanpa filter incremental)...")
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -322,9 +333,11 @@ async def retry_failed(tables: Dict[str, dict]):
             if res.ok:
                 db.clear_failure(tbl, pt, ent)
                 logger.info(f"  pulih: {tbl}/{pt}/{ent} ({res.received} baris)")
+                recovered_rows[tbl] = recovered_rows.get(tbl, 0) + res.received
             else:
                 db.record_failure(tbl, pt, ent, res.reason, res.detail,
                                   res.expected, res.received)
+    return recovered_rows
 
 
 @flow(name="backbone-client-pull", log_prints=True)
@@ -347,22 +360,37 @@ async def backbone_client_pull():
         "param_type": "wilayah", "schema_name": "dbo",
         "pk_columns": ["sekolah_id"], "col_defs": [],
     })
-    npsn_list = await pull_sekolah(kode_wilayah_list, sekolah_meta)
+    npsn_list, sekolah_stats = await pull_sekolah(kode_wilayah_list, sekolah_meta)
+    run_stats: List[dict] = [sekolah_stats]
     tbl_npsn, tbl_wilayah, tbl_ref = route_tables(tables)
     if npsn_list:
         for tbl_name, meta in tbl_npsn.items():
             logger.info(f"Tarik (npsn) → [{meta['schema_name']}].[{tbl_name}]")
-            await pull_by_npsn(tbl_name, npsn_list, meta)
+            run_stats.append(await pull_by_npsn(tbl_name, npsn_list, meta))
     else:
         logger.warning("NPSN list kosong, lewati tabel param_type='npsn'.")
     for tbl_name, meta in tbl_wilayah.items():
         logger.info(f"Tarik (wilayah) → [{meta['schema_name']}].[{tbl_name}]")
-        await pull_by_wilayah(tbl_name, kode_wilayah_list, meta)
+        run_stats.append(await pull_by_wilayah(tbl_name, kode_wilayah_list, meta))
     if settings.pull_ref:
         for tbl_name, meta in tbl_ref.items():
             logger.info(f"Tarik (ref) → [{meta['schema_name']}].[{tbl_name}]")
-            await pull_ref(tbl_name, meta)
-    await retry_failed(tables)
+            run_stats.append(await pull_ref(tbl_name, meta))
+
+    # Retry lalu perbarui pull_log tiap tabel dengan hasil AKHIR (bukan snapshot
+    # sebelum retry) — dibaca ulang dari pull_failures yang tersisa, bukan
+    # dihitung dari selisih, supaya benar walau ada sisa gagal dari run lama.
+    recovered_rows = await retry_failed(tables)
+    remaining_by_table: Dict[str, int] = {}
+    for f in db.list_failures():
+        remaining_by_table[f["tbl_name"]] = remaining_by_table.get(f["tbl_name"], 0) + 1
+    for stat in run_stats:
+        tbl = stat["tbl_name"]
+        final_received = stat["rows_received"] + recovered_rows.get(tbl, 0)
+        final_failed = remaining_by_table.get(tbl, 0)
+        db.update_pull_log(tbl, stat["param_type"], stat["run_started_at"],
+                           final_received, final_failed)
+
     n_failures = db.count_failures()
     assert_complete(n_failures)
     logger.info(f"✓ Selesai — 100% lengkap — {datetime.now():%Y-%m-%d %H:%M}")
