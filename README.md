@@ -92,8 +92,11 @@ Salin `.env.example` menjadi `.env` lalu isi sesuai lingkungan client. Variabel 
 | `BACKBONE_PER_PAGE`        | Opsional| `500`                                                                  | Jumlah baris per halaman saat memanggil API Backbone.                                                            |
 | `BACKBONE_RATE_LIMIT`      | Opsional| `20`                                                                   | Maks request/detik ke Backbone API (batas resmi saat ini **20/detik**). Penarikan dijaga tidak melebihi ini. Naikkan bila batas API dinaikkan. |
 | `BACKBONE_CONCURRENCY`     | Opsional| `16`                                                                   | Jumlah entity (NPSN/kecamatan) yang ditarik **paralel**. Semakin besar semakin cepat, tetap dibatasi `BACKBONE_RATE_LIMIT`. |
-| `SCHEDULE_CRON`            | Opsional| `0 2 * * *`                                                            | Jadwal cron standar (menit jam tgl bulan hari) untuk `main.py` (tanpa `--run-once`). Default: setiap hari jam 02:00. **Hanya benar-benar memicu run otomatis jika Prefect Server aktif** — lihat peringatan di §5. |
+| `SCHEDULE_CRON`            | Opsional| `0 2 * * *`                                                            | Mode `serve` (default): jadwal cron standar (menit jam tgl bulan hari). **Hanya benar-benar memicu run otomatis jika Prefect Server aktif** — lihat peringatan di §5. Mode `--loop` dgn `SCHEDULE_AUTO_FROM_API=true` (default): hanya field **jam:menit** yang dipakai (tgl/bulan/hari diabaikan, digantikan tanggal dari Backbone) — lihat §5.1. |
 | `SCHEDULE_TIMEZONE`        | Opsional| `Asia/Jakarta`                                                         | Timezone untuk `SCHEDULE_CRON`.                                                                                  |
+| `SCHEDULE_AUTO_FROM_API`   | Opsional| `true`                                                                 | **Khusus mode `--loop`.** Jika `true`, tanggal jadwal diambil otomatis dari `GET /user-info/schedule` Backbone (bukan tebak manual). Jika `false`, atau `SCHEDULE_CRON` bukan jam:menit tunggal, atau API gagal diakses — fallback ke `SCHEDULE_CRON` apa adanya. Lihat §5.1. |
+| `SCHEDULE_RETRY_COUNT`     | Opsional| `3`                                                                    | **Khusus mode `--loop`** dgn `SCHEDULE_AUTO_FROM_API=true`. Jumlah percobaan berjeda per hari jadwal (jaga-jaga bila percobaan pertama gagal, mis. gangguan jaringan sesaat). Otomatis dipangkas bila jamnya akan melewati tengah malam. |
+| `SCHEDULE_RETRY_INTERVAL_HOURS` | Opsional| `4`                                                               | **Khusus mode `--loop`** dgn `SCHEDULE_AUTO_FROM_API=true`. Jeda jam antar percobaan dalam `SCHEDULE_RETRY_COUNT`. |
 | `DEPLOYMENT_NAME`          | Opsional| `backbone-client-pull`                                                 | Nama deployment yang didaftarkan ke Prefect `serve`.                                                             |
 | `PULL_REF`                 | Opsional| `false`                                                                | Jika `true`, tabel referensi (`param_type=ref`) ikut ditarik setiap siklus.                                      |
 | `PULL_LOG_RETENTION_DAYS`  | Opsional| `60`                                                                   | Berapa hari riwayat aktivitas (`sync.pull_log`) disimpan sebelum dihapus otomatis. Lihat §8.                     |
@@ -117,9 +120,17 @@ Untuk produksi, jalankan `uv run python main.py` (mode `serve`, bukan `--run-onc
 
 ### 5.1 Mode `--loop`: jadwal internal tanpa Prefect Server (Opsi B)
 
-`uv run python main.py --loop` menjalankan proses jangka panjang yang **menghitung sendiri** jadwal berikutnya dari `SCHEDULE_CRON`/`SCHEDULE_TIMEZONE` di `.env` (pakai library `croniter`) — mendukung ekspresi cron apa pun (bukan cuma jam tetap), dan **tidak memerlukan Prefect Server/Docker sama sekali**. Cocok dipasang sebagai service biasa (NSSM/systemd, §5.3/§5.4) tanpa menambah infrastruktur.
+`uv run python main.py --loop` menjalankan proses jangka panjang yang **menghitung sendiri** jadwal berikutnya (pakai library `croniter`) dan **tidak memerlukan Prefect Server/Docker sama sekali**. Cocok dipasang sebagai service biasa (NSSM/systemd, §5.3/§5.4) tanpa menambah infrastruktur.
 
-Perilakunya:
+**Jadwal otomatis dari Backbone (default, `SCHEDULE_AUTO_FROM_API=true`):** Backbone membatasi hari-dalam-bulan (`tanggal`) kapan sebuah akun boleh membuat request akses baru — diatur oleh Backbone/Kemendikdasmen sendiri per akun (lihat §7 soal `create_request`/jadwal akses), **bukan** sesuatu yang bisa diatur lewat proyek ini. Daripada client harus tahu/hardcode pola tanggalnya secara manual di `SCHEDULE_CRON`, tiap awal iterasi `--loop`:
+
+1. Login (access-token) lalu panggil `GET /user-info/schedule` — dapat daftar tanggal jadwal akun (mis. `[14, 28]`).
+2. Gabungkan tanggal itu dengan **jam:menit** dari `SCHEDULE_CRON` (mis. `0 2 * * *` → jam `02:00`) dan `SCHEDULE_RETRY_COUNT`/`SCHEDULE_RETRY_INTERVAL_HOURS`, membentuk cron dinamis — mis. tanggal `[14, 28]`, jam basis `02:00`, retry 3× berjeda 4 jam → `0 2,6,10 14,28 * *` (coba jam 02:00, kalau run sebelumnya di jendela itu belum sukses akan tercoba lagi jam 06:00 dan 10:00, di tanggal 14 **dan** 28 tiap bulan).
+3. Cron dinamis itu dipakai untuk menghitung jadwal berikutnya — **bukan** `SCHEDULE_CRON` tanggal/bulan/harinya (field jam:menitnya tetap dipakai).
+
+**Fallback otomatis ke `SCHEDULE_CRON` manual** (dicatat jelas di log, proses tetap jalan) bila: `SCHEDULE_AUTO_FROM_API=false`, atau `SCHEDULE_CRON` bukan format jam:menit tunggal sederhana (mis. `0 2 * * *`, bukan `0 2,6 * * *` atau `*/5 2 * * *`), atau panggilan ke Backbone gagal (jaringan/token), atau `GET /user-info/schedule` kosong.
+
+Perilaku lainnya:
 - Saat start, **menunggu sampai jadwal berikutnya tiba** dulu (tidak langsung menarik data begitu proses dimulai/di-restart).
 - Jadwal yang **terlewat** (mis. komputer/VM mati saat melewati jam terjadwal) otomatis **dilewati** — begitu proses nyala lagi, ia menunggu ke kejadian berikutnya, bukan langsung menyusulkan run yang terlewat.
 - Bila satu siklus penarikan **gagal** (mis. error API/DB), proses **tidak berhenti** — kegagalan dicatat ke log lalu loop lanjut menunggu jadwal berikutnya seperti biasa.
@@ -127,10 +138,11 @@ Perilakunya:
 
 Contoh log:
 ```
-Mode loop internal aktif — jadwal '0 2 * * *' (Asia/Jakarta). Tidak perlu Prefect Server.
-[*] Menunggu... eksekusi berikutnya pada: 2026-08-04 02:00:00 WIB (31245 detik lagi)
+Mode loop internal aktif (Asia/Jakarta). Tidak perlu Prefect Server.
+[*] Jadwal otomatis dari Backbone: tanggal [14, 28] → cron '0 2,6,10 14,28 * *'
+[*] Menunggu... eksekusi berikutnya pada: 2026-08-14 02:00:00 WIB (683473 detik lagi)
 
-[2026-08-04 02:00:00] Eksekusi dimulai...
+[2026-08-14 02:00:00] Eksekusi dimulai...
 Eksekusi selesai.
 ```
 
