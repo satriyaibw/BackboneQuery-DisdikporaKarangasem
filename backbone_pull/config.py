@@ -61,6 +61,9 @@ class Settings:
     backbone_concurrency: int
     schedule_cron: str
     schedule_timezone: str
+    schedule_auto_from_api: bool
+    schedule_retry_count: int
+    schedule_retry_interval_hours: int
     deployment_name: str
     pull_ref: bool
     pull_log_retention_days: int
@@ -110,6 +113,9 @@ def load_settings() -> Settings:
         backbone_concurrency=_int("BACKBONE_CONCURRENCY", 16),
         schedule_cron=os.getenv("SCHEDULE_CRON") or "0 2 * * *",
         schedule_timezone=os.getenv("SCHEDULE_TIMEZONE") or "Asia/Jakarta",
+        schedule_auto_from_api=_bool("SCHEDULE_AUTO_FROM_API", True),
+        schedule_retry_count=_int("SCHEDULE_RETRY_COUNT", 3),
+        schedule_retry_interval_hours=_int("SCHEDULE_RETRY_INTERVAL_HOURS", 4),
         deployment_name=os.getenv("DEPLOYMENT_NAME") or "backbone-client-pull",
         pull_ref=_bool("PULL_REF", False),
         pull_log_retention_days=_int("PULL_LOG_RETENTION_DAYS", 60),
