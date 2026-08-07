@@ -1,8 +1,5 @@
 from dotenv import load_dotenv
 
-# Muat .env lebih dulu — sebelum modul Prefect diimpor lewat backbone_pull.flow —
-# agar variabel Prefect (mis. PREFECT_API_URL / PREFECT_API_KEY) dari .env sudah
-# tersedia saat Prefect membaca konfigurasinya.
 load_dotenv()
 
 import argparse  # noqa: E402
@@ -25,12 +22,12 @@ from backbone_pull.scheduler import next_run_time  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Penarikan data Backbone (Prefect serve).")
+    p = argparse.ArgumentParser(description="Penarikan data Backbone")
     p.add_argument("--run-once", action="store_true",
                    help="Jalankan flow sekali lalu keluar (tanpa scheduler).")
     p.add_argument("--loop", action="store_true",
                    help="Jalankan flow berulang sesuai SCHEDULE_CRON/SCHEDULE_TIMEZONE "
-                        "di .env, tanpa perlu Prefect Server (cocok utk NSSM/service biasa).")
+                        "di .env.")
     return p
 
 
@@ -79,7 +76,7 @@ def run_loop(s):
     # flush=True wajib: saat stdout diarahkan ke file (mis. NSSM AppStdout, §5.1),
     # Python memakai block-buffering, bukan line-buffering — tanpa flush, pesan
     # bisa tertahan di buffer dan tidak muncul di file log secara realtime.
-    print(f"Mode loop internal aktif ({s.schedule_timezone}). Tidak perlu Prefect Server.",
+    print(f"Mode loop internal aktif ({s.schedule_timezone}).",
           flush=True)
     while True:
         cron_expr = asyncio.run(_resolve_cron(s))
