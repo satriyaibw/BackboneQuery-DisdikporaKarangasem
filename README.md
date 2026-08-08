@@ -21,7 +21,7 @@ Proyek ini menarik data dari **Backbone API** dan menyimpannya ke database **SQL
 
 - Mengambil **access-token** otomatis (tukar username/password → JWT), lalu membuat *request* akses ke Backbone API, lalu mengambil metadata tabel yang tersedia (`/metadata`).
 - Menarik daftar wilayah akses (kecamatan) client, lalu menarik data tabel `sekolah` per wilayah untuk mendapatkan daftar NPSN.
-- Berdasarkan metadata, tabel-tabel lain ditarik per NPSN (`param_type=npsn`) atau per wilayah (`param_type=wilayah`); tabel referensi (`param_type=ref`) bersifat opsional (diatur oleh `PULL_REF`).
+- Berdasarkan metadata, tabel-tabel lain ditarik per NPSN (`param_type=npsn`) atau per wilayah (`param_type=wilayah`); tabel referensi (`param_type=ref`) bersifat opsional (diatur oleh `PULL_REF`) dan diambil lewat **download ZIP sekali jalan** (lebih hemat request), dengan fallback otomatis ke jalur lama per-tabel bila perlu — lihat §8.
 - Setiap tabel disimpan dengan skema **incremental**: setiap tabel punya *checkpoint* `last_update` (disimpan di skema `sync`, tabel `pull_checkpoint`) sehingga proses berikutnya hanya menarik data yang berubah sejak penarikan terakhir.
 - Struktur tabel (skema, kolom, tipe data, primary key) dibuat/disesuaikan otomatis mengikuti metadata dari Backbone API (auto DDL), termasuk pembuatan database jika belum ada (bisa dimatikan, lihat §8).
 - Penarikan dilakukan **paralel** (banyak NPSN/kecamatan sekaligus) dengan *rate limiter* yang menjaga laju request tidak melebihi batas API (default 20/detik) — jauh lebih cepat dari sekuensial, tetap aman. Diatur lewat `BACKBONE_CONCURRENCY` & `BACKBONE_RATE_LIMIT`.
@@ -351,6 +351,14 @@ Arti kolom `reason`:
 - Di **akhir setiap run**, item di `sync.pull_failures` dicoba ulang sekali — *full pull* tanpa filter incremental agar dijamin lengkap. Yang berhasil dihapus dari tabel.
 - Item yang masih gagal **tetap tersimpan** dan **dicoba lagi otomatis pada run terjadwal berikutnya**. Gap akan menutup sendiri saat sumber pulih — Anda cukup memantau apakah `sync.pull_failures` sudah kosong.
 - Untuk memaksa coba ulang segera (tanpa menunggu jadwal): jalankan `uv run python main.py --run-once`.
+
+### Tabel referensi (`PULL_REF=true`): download ZIP vs jalur lama per-tabel
+Saat `PULL_REF=true`, tabel referensi (`param_type=ref`) diambil lewat dua jalur, otomatis, **tanpa perlu konfigurasi tambahan**:
+
+1. **Jalur utama — download ZIP sekali jalan** (`GET /referensi/download`): satu request mengambil snapshot *seluruh* tabel referensi sekaligus (dikemas server sebagai ZIP berisi satu CSV per tabel + `manifest.json`), jauh lebih hemat request dibanding menarik tiap tabel referensi satu per satu secara berpaginasi.
+2. **Jalur lama — per tabel berpaginasi** (`GET /referensi?ref=<nama>`): dipakai otomatis sebagai *fallback* untuk tabel yang **tidak** berhasil dimuat dari ZIP — baik karena server belum menyediakan endpoint download (fallback penuh, seperti sebelum fitur ini ada), ZIP belum pernah di-*generate* di sisi server, maupun satu tabel tertentu hilang/jumlah barisnya tidak cocok dengan `manifest.json` (fallback per tabel).
+
+Karena fallback ini otomatis, proses tetap berjalan normal walau server Backbone yang diakses belum mendukung `GET /referensi/download` — tidak ada perubahan perilaku yang terlihat client selain lebih cepat begitu server mendukungnya. Tidak ada variabel `.env` baru yang perlu diisi untuk ini.
 
 ### Riwayat aktivitas penarikan (`sync.pull_log`)
 Setiap kali sebuah tabel selesai ditarik (per run), satu baris ringkasan dicatat ke tabel **`sync.pull_log`** — sehingga aktivitas penarikan bisa dicek kapan saja tanpa perlu membuka log Prefect/terminal:
