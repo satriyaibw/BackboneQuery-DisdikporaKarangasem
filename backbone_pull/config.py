@@ -7,7 +7,7 @@ load_dotenv(dotenv_path=Path(".") / ".env")
 
 DEFAULT_BASE_URL = "https://api.data.kemendikdasmen.go.id/svc/satu-data/pendidikan/v3"
 DEFAULT_AUTH_URL = "https://api.data.kemendikdasmen.go.id/svc/satu-data/auth/v1/access-token"
-VALID_DIALECTS = ("sqlserver", "postgres")
+VALID_DIALECTS = ("sqlserver", "postgres", "mysql")
 
 
 class MissingConfigError(Exception):
@@ -93,7 +93,7 @@ def load_settings() -> Settings:
             + ". Salin .env.example ke .env lalu isi nilainya."
         )
 
-    default_port = 1433 if dialect == "sqlserver" else 5432
+    default_port = {"sqlserver": 1433, "postgres": 5432, "mysql": 3306}[dialect]
     return Settings(
         db_dialect=dialect,
         db_host=required["DB_HOST"],

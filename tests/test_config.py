@@ -63,3 +63,10 @@ def test_non_numeric_db_port_raises_friendly_error(monkeypatch):
     with pytest.raises(MissingConfigError) as e:
         load_settings()
     assert "DB_PORT" in str(e.value)
+
+def test_mysql_dialect_default_port(monkeypatch):
+    env = dict(BASE_ENV); env["DB_DIALECT"] = "mysql"; del env["DB_PORT"]
+    _set(monkeypatch, env)
+    s = load_settings()
+    assert s.db_dialect == "mysql"
+    assert s.db_port == 3306
