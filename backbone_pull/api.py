@@ -5,7 +5,7 @@ import aiohttp
 
 
 class BackboneAPI:
-    """Client tipis untuk Backbone API: ambil access-token + GET + retry.
+    """Client untuk Backbone API: ambil access-token + GET + retry.
 
     Access-token (JWT) ditukar dari username/password lewat `fetch_token`; sesudah
     itu `headers` berisi Bearer <token> + X-API-Key untuk semua request data.
