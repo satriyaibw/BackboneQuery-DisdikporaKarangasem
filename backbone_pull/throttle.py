@@ -7,7 +7,7 @@ class RateLimiter:
     """Beri jarak minimal ``1/rate_per_sec`` detik antar acquire.
 
     Aman dipakai banyak coroutine sekaligus: tiap acquire memesan "slot"
-    di bawah lock (cepat), lalu tidur di luar lock sampai slotnya tiba —
+    di bawah lock (cepat), lalu sleep di luar lock sampai slotnya tiba —
     sehingga total laju mulai request tidak melebihi ``rate_per_sec``.
     ``rate_per_sec <= 0`` menonaktifkan throttle.
     """
