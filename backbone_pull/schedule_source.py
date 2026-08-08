@@ -1,10 +1,9 @@
 """Jadwal penarikan otomatis dari GET /user-info/schedule Backbone.
 
-Backbone menentukan hari-dalam-bulan (`tanggal`) kapan akun boleh membuat
-request akses baru — di luar sistem kami, diatur oleh Backbone/Kemendikdasmen
-sendiri per akun. Modul ini mengambil daftar tanggal itu dan menggabungkannya
+Admin Backbone menentukan (`tanggal`) kapan akun boleh membuat
+request akses baru. Modul ini mengambil daftar tanggal dan menggabungkannya
 dengan jam:menit dari SCHEDULE_CRON (mis. "0 2 * * *" -> jam 02:00) untuk
-membentuk ekspresi cron dinamis, mis. "0 2,6,10 14,28 * *" — sehingga
+membentuk cron dinamis, mis. "0 2,6,10 14,28 * *" — sehingga
 `main.py --loop` mencoba beberapa kali (retry_count, berjeda
 retry_interval_hours) di tiap hari yang benar-benar dijadwalkan Backbone,
 tanpa client perlu tahu/hardcode pola tanggalnya secara manual.

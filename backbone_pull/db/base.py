@@ -10,17 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseAdapter(ABC):
-    """Antarmuka adapter database + orkestrasi bersama lintas dialect."""
 
     def __init__(self, settings):
         self.settings = settings
         self.schema_ctrl = "sync"
 
     def __getstate__(self):
-        """Buang engine SQLAlchemy saat di-pickle. Engine memegang lock native
-        (_thread.RLock) yang tidak bisa diserialisasi — ini dibutuhkan Prefect
-        saat mengirim flow ke subprocess terpisah (flow.serve() + Prefect Server).
-        Dibangun ulang di __setstate__ via _build_engines()."""
         return {k: v for k, v in self.__dict__.items() if not isinstance(v, Engine)}
 
     def __setstate__(self, state):
@@ -117,14 +112,6 @@ class DatabaseAdapter(ABC):
     @abstractmethod
     def purge_old_pull_log(self, retention_days: int) -> int:
         """Hapus baris pull_log lebih tua dari retention_days; kembalikan jumlah baris dihapus."""
-        ...
-
-    @abstractmethod
-    def update_pull_log(self, tbl_name: str, param_type: str, run_started_at: datetime,
-                        rows_received: int, entities_failed: int):
-        """Perbarui baris pull_log (dikenali dari tbl_name+param_type+run_started_at)
-        dengan hasil AKHIR setelah retry_failed — supaya status mencerminkan
-        kondisi sebenarnya di akhir run, bukan snapshot sebelum retry."""
         ...
 
     # ── konversi nilai (bersama) ───────────────────────────────────────────

@@ -1,8 +1,8 @@
-"""Helper penarikan berpaginasi dengan verifikasi kelengkapan.
+"""Helper penarikan menggunakan page dengan verifikasi kelengkapan data.
 
-Menarik seluruh halaman satu query (per NPSN / wilayah / ref), meng-upsert
+Menarik seluruh halaman satu query (per NPSN / wilayah / ref), upsert
 tiap halaman, lalu memverifikasi jumlah baris diterima terhadap `total_rows`
-yang dilaporkan API. Hasilnya (`PullResult`) dipakai flow untuk memutuskan
+yang dari respon API. Hasilnya (`PullResult`) dipakai flow untuk memutuskan
 apakah entity itu lengkap, atau perlu dicatat ke dead-letter.
 """
 

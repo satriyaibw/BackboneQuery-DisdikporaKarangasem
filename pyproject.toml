@@ -1,7 +1,7 @@
 [project]
 name = "backbone-client-pull"
 version = "1.0.0"
-description = "Penarikan data Backbone API ke SQL Server / PostgreSQL (Prefect serve)"
+description = "Penarikan data Backbone API ke SQL Server / PostgreSQL / MySQL (Prefect serve)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -10,8 +10,10 @@ dependencies = [
     "sqlalchemy>=2.0",
     "pymssql>=2.3",
     "psycopg2-binary>=2.9",
+    "pymysql>=1.2",
     "python-dotenv>=1.0",
     "croniter>=6.2.4",
+    "pymysql>=1.2.0",
 ]
 
 [dependency-groups]

@@ -25,7 +25,7 @@ CONCURRENCY = settings.backbone_concurrency
 
 
 def assert_complete(n_failures: int):
-    """Gagalkan run bila masih ada item yang belum lengkap (dead-letter)."""
+    """Gagalkan run bila masih ada item yang belum lengkap."""
     if n_failures:
         raise RuntimeError(
             f"Penarikan tidak lengkap: {n_failures} item masih gagal — lihat tabel "
@@ -34,7 +34,6 @@ def assert_complete(n_failures: int):
 
 @task(name="backbone-get-token", log_prints=True, retries=2, retry_delay_seconds=10)
 async def get_access_token():
-    """Tukar username/password → access-token, dipakai untuk semua request run ini."""
     logger = get_run_logger()
     timeout = aiohttp.ClientTimeout(total=30)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -303,9 +302,9 @@ async def pull_ref(tbl_name: str, meta: dict) -> dict:
 
 @task(name="backbone-retry-failed", log_prints=True)
 async def retry_failed(tables: Dict[str, dict]) -> Dict[str, int]:
-    """Coba ulang item di dead-letter — full pull (tanpa filter last_update) agar lengkap.
-    Kembalikan tambahan baris yang pulih per tabel (dipakai flow utama untuk
-    memperbarui pull_log agar status mencerminkan hasil AKHIR setelah retry)."""
+    """Coba ulang item yg gagal — full pull (tanpa filter last_update) agar lengkap.
+    Kembalikan tambahan baris  per tabel (dipakai flow utama untuk
+    update pull_log agar status mencerminkan hasil AKHIR setelah retry)."""
     logger = get_run_logger()
     recovered_rows: Dict[str, int] = {}
     failures = db.list_failures()

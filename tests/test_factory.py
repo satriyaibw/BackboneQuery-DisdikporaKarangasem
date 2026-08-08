@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from backbone_pull.db import get_adapter
 from backbone_pull.db.sqlserver import SqlServerAdapter
 from backbone_pull.db.postgres import PostgresAdapter
+from backbone_pull.db.mysql import MySQLAdapter
 
 def _settings(dialect):
     return SimpleNamespace(db_dialect=dialect, db_host="h", db_port=1, db_user="u",
@@ -14,6 +15,9 @@ def test_returns_sqlserver():
 
 def test_returns_postgres():
     assert isinstance(get_adapter(_settings("postgres")), PostgresAdapter)
+
+def test_returns_mysql():
+    assert isinstance(get_adapter(_settings("mysql")), MySQLAdapter)
 
 def test_unknown_raises():
     with pytest.raises(ValueError):

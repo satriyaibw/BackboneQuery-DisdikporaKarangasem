@@ -1,6 +1,6 @@
 """Pemilihan request akses aktif dari respons GET /user-info/request.
 
-Backbone membatasi pembuatan request baru ke hari-hari terjadwal — di luar hari
+Backbone membatasi pembuatan request baru sesuai jadwal — di luar hari
 itu, `POST /user-info/request` menolak. Namun request yang SUDAH dibuat tetap
 berlaku sampai `expired_date`, dan bisa dibaca ulang lewat GET tanpa membuat
 yang baru. `pick_active_request` memilih request tersebut dari daftar.
