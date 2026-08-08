@@ -10,6 +10,7 @@ from .api import BackboneAPI
 from .config import load_settings
 from .db import get_adapter
 from .puller import pull_paginated
+from .ref_bulk import download_referensi_zip, parse_referensi_zip
 from .request_info import pick_active_request
 from .routing import route_tables
 from .throttle import RateLimiter
@@ -300,6 +301,58 @@ async def pull_ref(tbl_name: str, meta: dict) -> dict:
             "rows_received": res.received, "entities_failed": 0 if res.ok else 1}
 
 
+@task(name="backbone-pull-ref-bulk", log_prints=True)
+async def pull_ref_bulk(tbl_ref: Dict[str, dict]) -> Tuple[List[dict], set]:
+    """Coba muat semua tabel referensi sekaligus lewat GET /referensi/download
+    (ZIP: satu CSV per tabel + manifest.json) — jauh lebih hemat request
+    dibanding /referensi per tabel berpaginasi. Best-effort: kegagalan apa pun
+    (server belum mendukung endpoint ini, ZIP rusak, tabel hilang/jumlah baris
+    tak cocok manifest) tidak menggagalkan task ini — tabel yang tidak berhasil
+    dimuat di sini otomatis ditarik lewat jalur lama (pull_ref per tabel) oleh
+    flow utama, jadi tetap 100% berfungsi walau server belum punya endpoint ini."""
+    logger = get_run_logger()
+    stats: List[dict] = []
+    loaded: set = set()
+    timeout = aiohttp.ClientTimeout(total=120)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        zip_bytes = await download_referensi_zip(session, api, logger)
+    if not zip_bytes:
+        return stats, loaded
+
+    try:
+        tables_rows, manifest = parse_referensi_zip(zip_bytes)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Gagal membaca ZIP referensi: {e} — pakai jalur lama (per-tabel).")
+        return stats, loaded
+
+    expected_counts = {t["tbl_name"]: t.get("row_count") for t in manifest.get("tables", [])}
+    for tbl_name, rows in tables_rows.items():
+        meta = tbl_ref.get(tbl_name)
+        if meta is None:
+            continue  # tabel ada di ZIP tapi bukan bagian dari metadata param_type='ref' saat ini
+        expected = expected_counts.get(tbl_name)
+        if expected is not None and len(rows) != expected:
+            logger.warning(
+                f"{tbl_name}: baris ZIP ({len(rows)}) != manifest ({expected}) — lewati, pakai jalur lama.")
+            continue
+        started_at = datetime.now()
+        total = 0
+        for i in range(0, len(rows), PER_PAGE):
+            chunk = rows[i:i + PER_PAGE]
+            total += await asyncio.to_thread(db.upsert_rows, tbl_name, chunk, meta)
+        finished_at = datetime.now()
+        db.clear_failure(tbl_name, "ref", "")
+        if total:
+            db.set_last_update(tbl_name, finished_at)
+            db.add_checkpoint_count(tbl_name, total)
+        db.log_pull_summary(tbl_name, "ref", started_at, finished_at, total, 1, 0)
+        logger.info(f"{tbl_name}: {total} baris dimuat lewat download ZIP referensi")
+        stats.append({"tbl_name": tbl_name, "param_type": "ref", "run_started_at": started_at,
+                      "rows_received": total, "entities_failed": 0})
+        loaded.add(tbl_name)
+    return stats, loaded
+
+
 @task(name="backbone-retry-failed", log_prints=True)
 async def retry_failed(tables: Dict[str, dict]) -> Dict[str, int]:
     """Coba ulang item yg gagal — full pull (tanpa filter last_update) agar lengkap.
@@ -372,7 +425,11 @@ async def backbone_client_pull():
         logger.info(f"Tarik (wilayah) → [{meta['schema_name']}].[{tbl_name}]")
         run_stats.append(await pull_by_wilayah(tbl_name, kode_wilayah_list, meta))
     if settings.pull_ref:
+        bulk_stats, bulk_loaded = await pull_ref_bulk(tbl_ref)
+        run_stats.extend(bulk_stats)
         for tbl_name, meta in tbl_ref.items():
+            if tbl_name in bulk_loaded:
+                continue
             logger.info(f"Tarik (ref) → [{meta['schema_name']}].[{tbl_name}]")
             run_stats.append(await pull_ref(tbl_name, meta))
 
