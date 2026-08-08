@@ -17,7 +17,7 @@ Proyek Sync Client mandiri untuk menarik data dari **Backbone API** (Kemendikdas
 
 ## 1. Ringkasan
 
-Proyek ini menarik data dari **Backbone API** dan menyimpannya ke database **SQL Server** atau **PostgreSQL** milik client. Alur singkatnya:
+Proyek ini menarik data dari **Backbone API** dan menyimpannya ke database **SQL Server**, **PostgreSQL**, atau **MySQL** milik client. Alur singkatnya:
 
 - Mengambil **access-token** otomatis (tukar username/password → JWT), lalu membuat *request* akses ke Backbone API, lalu mengambil metadata tabel yang tersedia (`/metadata`).
 - Menarik daftar wilayah akses (kecamatan) client, lalu menarik data tabel `sekolah` per wilayah untuk mendapatkan daftar NPSN.
@@ -27,7 +27,9 @@ Proyek ini menarik data dari **Backbone API** dan menyimpannya ke database **SQL
 - Penarikan dilakukan **paralel** (banyak NPSN/kecamatan sekaligus) dengan *rate limiter* yang menjaga laju request tidak melebihi batas API (default 20/detik) — jauh lebih cepat dari sekuensial, tetap aman. Diatur lewat `BACKBONE_CONCURRENCY` & `BACKBONE_RATE_LIMIT`.
 - Dijalankan lewat **Prefect `serve`** — satu proses yang berjalan terus-menerus di sisi client. **Penting:** agar jadwal (`SCHEDULE_CRON`) benar-benar memicu run **otomatis**, proses ini harus tersambung ke **Prefect Server** (self-hosted, lihat §6) atau Prefect Cloud. Tanpa itu (mode ringan/*ephemeral*, default), jadwal terdaftar tapi **tidak pernah otomatis terpicu** — lihat peringatan & alternatif di §5.
 
-Database tujuan dipilih lewat `DB_DIALECT` (`sqlserver` atau `postgres`); logika penarikan data & incremental sama, hanya dialek SQL (tipe kolom, `MERGE`/`ON CONFLICT`, dsb.) yang berbeda di balik layar.
+Database tujuan dipilih lewat `DB_DIALECT` (`sqlserver`, `postgres`, atau `mysql`); logika penarikan data & incremental sama, hanya dialek SQL (tipe kolom, `MERGE`/`ON CONFLICT`/`ON DUPLICATE KEY UPDATE`, dsb.) yang berbeda di balik layar.
+
+> **Catatan khusus `DB_DIALECT=mysql`:** MySQL tidak punya konsep *schema-dalam-database* seperti SQL Server/PostgreSQL. Semua `schema_name` dari Backbone (`dbo`, `ref`, `vld`, `datamart`, dst.) digabung ke **satu database** (`DB_NAME`), dengan nama tabel diberi **prefix schema**-nya — mis. `dbo.sekolah` → tabel `dbo_sekolah`, `vld.v_ptk` → `vld_v_ptk`. Butuh **MySQL 8.0+**.
 
 ## 2. Prasyarat
 
@@ -45,7 +47,7 @@ Database tujuan dipilih lewat `DB_DIALECT` (`sqlserver` atau `postgres`); logika
     powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
     ```
 
-- Akses ke database tujuan (SQL Server **atau** PostgreSQL) dengan user yang punya hak baca/tulis pada database target (lihat §8 soal hak `CREATE DATABASE`).
+- Akses ke database tujuan (SQL Server, PostgreSQL, **atau** MySQL 8.0+) dengan user yang punya hak baca/tulis pada database target (lihat §8 soal hak `CREATE DATABASE`).
 - Kredensial akun Backbone API: **username**, **password**, dan **API key** (didapat dari pengelola Backbone/Kemendikdasmen — bukan bagian dari proyek ini). Access-token (JWT) diambil **otomatis** dari username/password di tiap run, jadi tidak perlu menyiapkan atau menempel JWT manual.
 
 ## 3. Langkah Instalasi
@@ -65,7 +67,7 @@ uv run python main.py                    # jalankan terjadwal (Prefect serve, cr
 ```
 
 Catatan:
-- `uv sync` membuat virtual environment (`.venv/`) dan menginstal seluruh dependensi sesuai `pyproject.toml` (`prefect`, `aiohttp`, `sqlalchemy`, `pymssql`, `psycopg2-binary`, `python-dotenv`, dst.).
+- `uv sync` membuat virtual environment (`.venv/`) dan menginstal seluruh dependensi sesuai `pyproject.toml` (`prefect`, `aiohttp`, `sqlalchemy`, `pymssql`, `psycopg2-binary`, `pymysql`, `python-dotenv`, dst.) — driver untuk ketiga dialect terpasang sekaligus, tinggal pilih lewat `DB_DIALECT`.
 - `uv run python -m backbone_pull.check` mencetak ringkasan konfigurasi lalu menguji koneksi database dan koneksi API Backbone (buat *request* akses). Pastikan semuanya `[ OK ]` sebelum lanjut.
 - `uv run python main.py --run-once` menjalankan satu siklus penarikan penuh secara langsung (tanpa scheduler) — cocok untuk uji coba awal atau uji manual.
 - `uv run python main.py` (tanpa argumen) menjalankan proses jangka panjang yang mendaftarkan jadwal (`SCHEDULE_CRON`) lewat Prefect `serve` dan menunggu di foreground. Untuk produksi, jalankan ini sebagai *service* (lihat §5).
@@ -76,14 +78,14 @@ Salin `.env.example` menjadi `.env` lalu isi sesuai lingkungan client. Variabel 
 
 | Variabel                  | Wajib?  | Default (di `.env.example`)                                         | Keterangan                                                                                                   |
 |----------------------------|---------|-----------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|
-| `DB_DIALECT`               | Wajib   | `sqlserver`                                                            | `sqlserver` atau `postgres`. Menentukan dialek SQL & driver yang dipakai.                                       |
+| `DB_DIALECT`               | Wajib   | `sqlserver`                                                            | `sqlserver`, `postgres`, atau `mysql`. Menentukan dialek SQL & driver yang dipakai.                              |
 | `DB_HOST`                  | Wajib   | *(kosong)*                                                             | Host/alamat server database.                                                                                    |
-| `DB_PORT`                  | Wajib*  | `1433`                                                                 | **Default di `.env.example` adalah `1433` (SQL Server)**. Untuk PostgreSQL, ubah menjadi `5432`.                 |
+| `DB_PORT`                  | Wajib*  | `1433`                                                                 | **Default di `.env.example` adalah `1433` (SQL Server)**. Untuk PostgreSQL ubah ke `5432`, untuk MySQL ubah ke `3306`. |
 | `DB_USER`                  | Wajib   | *(kosong)*                                                             | User database.                                                                                                   |
 | `DB_PASSWORD`              | Wajib   | *(kosong)*                                                             | Password database. **Jangan pernah commit nilai asli** (lihat §7).                                              |
-| `DB_NAME`                  | Wajib   | `backbone_client`                                                      | Nama database tujuan; boleh diganti sesuai kebutuhan client.                                                    |
+| `DB_NAME`                  | Wajib   | `backbone_client`                                                      | Nama database tujuan; boleh diganti sesuai kebutuhan client. Untuk MySQL, ini satu-satunya database — semua tabel (lintas schema Backbone) masuk ke sini dengan nama diberi prefix schema. |
 | `DB_AUTO_CREATE_DATABASE`  | Opsional| `true`                                                                 | Jika `true`, aplikasi mencoba membuat database `DB_NAME` otomatis kalau belum ada. Lihat §8.                    |
-| `DB_MAINTENANCE_DB`        | Opsional| `postgres`                                                             | **Hanya relevan untuk `DB_DIALECT=postgres`** — database maintenance yang dipakai untuk `CREATE DATABASE`. Lihat §8. |
+| `DB_MAINTENANCE_DB`        | Opsional| `postgres`                                                             | **Hanya relevan untuk `DB_DIALECT=postgres`** — database maintenance yang dipakai untuk `CREATE DATABASE`. Diabaikan untuk `sqlserver` (pakai `master`) dan `mysql` (connect tanpa database awal). Lihat §8. |
 | `BACKBONE_BASE_URL`        | Opsional| `https://api.data.kemendikdasmen.go.id/svc/satu-data/pendidikan/v3`   | URL dasar Backbone API (endpoint data). Biasanya tidak perlu diubah.                                             |
 | `BACKBONE_AUTH_URL`        | Opsional| `https://api.data.kemendikdasmen.go.id/svc/satu-data/auth/v1/access-token` | Endpoint tukar username/password → access-token. Biasanya tidak perlu diubah.                             |
 | `BACKBONE_API_KEY`         | Wajib   | *(kosong)*                                                             | API key Backbone milik client (dikirim sebagai header `X-API-Key` di tiap request data).                        |
@@ -101,7 +103,7 @@ Salin `.env.example` menjadi `.env` lalu isi sesuai lingkungan client. Variabel 
 | `PULL_REF`                 | Opsional| `false`                                                                | Jika `true`, tabel referensi (`param_type=ref`) ikut ditarik setiap siklus.                                      |
 | `PULL_LOG_RETENTION_DAYS`  | Opsional| `60`                                                                   | Berapa hari riwayat aktivitas (`sync.pull_log`) disimpan sebelum dihapus otomatis. Lihat §8.                     |
 
-\* `DB_PORT` punya default per dialect di kode (`1433` untuk `sqlserver`, `5432` untuk `postgres`) jika variabel dikosongkan sepenuhnya — namun karena `.env.example` sudah mengisi `1433`, **wajib diubah manual menjadi `5432` saat memakai PostgreSQL**.
+\* `DB_PORT` punya default per dialect di kode (`1433` untuk `sqlserver`, `5432` untuk `postgres`, `3306` untuk `mysql`) jika variabel dikosongkan sepenuhnya — namun karena `.env.example` sudah mengisi `1433`, **wajib diubah manual menjadi `5432`/`3306` saat memakai PostgreSQL/MySQL**.
 
 Nilai boolean (`DB_AUTO_CREATE_DATABASE`, `PULL_REF`) menerima `true/false`, `1/0`, `yes/no`, `y/n`, atau `on/off` (tidak case-sensitive).
 
@@ -309,20 +311,25 @@ Secara default, `docker-compose.yml` sudah membuka port 4200 ke semua interface 
   2. Set `DB_AUTO_CREATE_DATABASE=false` di `.env` dan buat database secara manual terlebih dahulu (aplikasi akan langsung memakainya tanpa mencoba membuat).
 
 - **PostgreSQL: auto-create database memakai `DB_MAINTENANCE_DB`**
-  PostgreSQL tidak mengizinkan `CREATE DATABASE` dijalankan dari koneksi ke database yang sama; karena itu proses auto-create untuk `DB_DIALECT=postgres` membuka koneksi terpisah ke database maintenance (`DB_MAINTENANCE_DB`, default `postgres`) untuk menjalankan `CREATE DATABASE`. Pastikan database maintenance tersebut ada dan user punya akses ke sana. (Untuk `DB_DIALECT=sqlserver`, koneksi maintenance memakai database `master` bawaan dan tidak dikonfigurasi lewat `.env`.)
+  PostgreSQL tidak mengizinkan `CREATE DATABASE` dijalankan dari koneksi ke database yang sama; karena itu proses auto-create untuk `DB_DIALECT=postgres` membuka koneksi terpisah ke database maintenance (`DB_MAINTENANCE_DB`, default `postgres`) untuk menjalankan `CREATE DATABASE`. Pastikan database maintenance tersebut ada dan user punya akses ke sana. (Untuk `DB_DIALECT=sqlserver`, koneksi maintenance memakai database `master` bawaan; untuk `DB_DIALECT=mysql`, koneksi maintenance connect ke server tanpa memilih database awal — keduanya tidak dikonfigurasi lewat `.env`.)
+
+- **MySQL: satu database, tabel diberi prefix schema**
+  MySQL tidak punya konsep schema-dalam-database. Semua `schema_name` Backbone digabung ke satu database (`DB_NAME`) dengan nama tabel diberi prefix schema-nya (mis. `dbo.sekolah` → `dbo_sekolah`, `vld.v_ptk` → `vld_v_ptk`). Tabel kontrol (`sync.pull_checkpoint`, `sync.pull_failures`, `sync.pull_log`) mengikuti pola yang sama → `sync_pull_checkpoint`, `sync_pull_failures`, `sync_pull_log`. Butuh **MySQL 8.0+**.
 
 - **Port default berbeda per dialect**
-  `.env.example` mengisi `DB_PORT=1433` (port default SQL Server). Jika `DB_DIALECT=postgres`, ubah `DB_PORT` menjadi `5432` (port default PostgreSQL) — atau sesuaikan dengan port kustom server database Anda.
+  `.env.example` mengisi `DB_PORT=1433` (port default SQL Server). Jika `DB_DIALECT=postgres`, ubah `DB_PORT` menjadi `5432`; jika `DB_DIALECT=mysql`, ubah menjadi `3306` — atau sesuaikan dengan port kustom server database Anda.
 
 - **`uv run python -m backbone_pull.check` melaporkan `[GAGAL]` pada API Backbone**
   Biasanya berarti `BACKBONE_USERNAME`/`BACKBONE_PASSWORD` (gagal ambil access-token) dan/atau `BACKBONE_API_KEY` salah. Output `check` menandai langkah **Token akses** dan **API Backbone** secara terpisah; pesan error dari Backbone (field `keterangan`) ditampilkan langsung — periksa kembali nilai di `.env`.
 
 - **`uv run python -m backbone_pull.check` melaporkan `[GAGAL]` pada koneksi database**
-  Periksa `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, dan `DB_NAME`; pastikan server database dapat dijangkau dari mesin client (firewall/network) dan driver terkait (`pymssql` untuk SQL Server, `psycopg2-binary` untuk PostgreSQL) sudah terinstal lewat `uv sync`.
+  Periksa `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, dan `DB_NAME`; pastikan server database dapat dijangkau dari mesin client (firewall/network) dan driver terkait (`pymssql` untuk SQL Server, `psycopg2-binary` untuk PostgreSQL, `pymysql` untuk MySQL) sudah terinstal lewat `uv sync`.
 
 ## 8. Memastikan Kelengkapan Data
 
 Penarikan ini memverifikasi kelengkapan secara otomatis, sehingga status run bisa dipercaya:
+
+> Contoh query di bawah pakai notasi `sync.pull_failures`/`sync.pull_log` (SQL Server/PostgreSQL). **Untuk `DB_DIALECT=mysql`**, ganti dengan nama tabel prefix-schema-nya: `sync_pull_failures` dan `sync_pull_log` (tanpa titik) — lihat §7.
 
 - **Run HIJAU (sukses) = data 100% lengkap.** Untuk tiap entity (NPSN / kecamatan) × tabel, jumlah baris yang diterima dibandingkan dengan `total_rows` yang dilaporkan API. Bila semua cocok dan tanpa error, run sukses.
 - **Run MERAH (gagal) = ada yang belum lengkap.** Flow sengaja digagalkan di akhir bila masih ada item yang belum lengkap — jadi terlihat jelas di Prefect UI / *exit code*, bukan "hijau palsu".
