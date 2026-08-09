@@ -337,3 +337,22 @@ class MySQLAdapter(DatabaseAdapter):
                 "WHERE tbl_name = :tbl AND param_type = :pt AND run_started_at = :started"
             ), {"rows": rows_received, "efail": entities_failed, "status": status,
                 "tbl": tbl_name, "pt": param_type, "started": run_started_at})
+
+    def update_latest_pull_log(self, tbl_name, param_type, additional_rows_received, entities_failed):
+        status = "ok" if entities_failed == 0 else "incomplete"
+        tname = self._tname(self.schema_ctrl, 'pull_log')
+        # MySQL menolak subquery langsung ke tabel yang sama di UPDATE ("can't
+        # specify target table for update in FROM clause") -- dibungkus lewat
+        # derived table (alias t) supaya optimizer memateri-kan hasilnya dulu.
+        with self._engine.begin() as conn:
+            conn.execute(text(
+                f"UPDATE {tname} "
+                "SET rows_received = rows_received + :add_rows, entities_failed = :efail, status = :status "
+                "WHERE id = ("
+                "  SELECT id FROM (SELECT id FROM "
+                f"    {tname} WHERE tbl_name = :tbl AND param_type = :pt "
+                "    ORDER BY run_started_at DESC LIMIT 1"
+                "  ) AS t"
+                ")"
+            ), {"add_rows": additional_rows_received, "efail": entities_failed, "status": status,
+                "tbl": tbl_name, "pt": param_type})

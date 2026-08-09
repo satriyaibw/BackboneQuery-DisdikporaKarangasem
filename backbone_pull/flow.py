@@ -509,31 +509,33 @@ async def retry_failed_only():
         logger.info("Tidak ada item di sync.pull_failures — tidak ada yang perlu di-retry.")
         return
 
-    by_table_before: Dict[str, int] = {}
+    by_key_before: Dict[Tuple[str, str], int] = {}
     for f in failures_before:
-        by_table_before[f["tbl_name"]] = by_table_before.get(f["tbl_name"], 0) + 1
+        key = (f["tbl_name"], f["param_type"])
+        by_key_before[key] = by_key_before.get(key, 0) + 1
     logger.info(f"▶ Retry-only: {len(failures_before)} item gagal di "
-                f"{len(by_table_before)} tabel — {datetime.now():%Y-%m-%d %H:%M}")
+                f"{len({k[0] for k in by_key_before})} tabel — {datetime.now():%Y-%m-%d %H:%M}")
 
-    batch_id = str(uuid.uuid4())
-    tables, request_id = await _authenticate_and_get_metadata()
+    tables, _request_id = await _authenticate_and_get_metadata()
     if not tables:
         logger.warning("Metadata kosong, tidak bisa retry.")
         return
 
-    started_at = datetime.now()
     recovered_rows = await retry_failed(tables)
-    finished_at = datetime.now()
 
-    by_table_after: Dict[str, int] = {}
+    by_key_after: Dict[Tuple[str, str], int] = {}
     for f in db.list_failures():
-        by_table_after[f["tbl_name"]] = by_table_after.get(f["tbl_name"], 0) + 1
+        key = (f["tbl_name"], f["param_type"])
+        by_key_after[key] = by_key_after.get(key, 0) + 1
 
-    for tbl_name, total_before in by_table_before.items():
+    # Koreksi baris pull_log TERBARU tiap tabel (ditulis run sebelumnya) di
+    # tempat -- bukan menyisipkan baris baru -- supaya status di pull_log
+    # ikut berubah dari 'incomplete' ke 'ok' begitu pull_failures bersih,
+    # konsisten dengan yang terlihat user tanpa perlu baris terpisah.
+    for (tbl_name, param_type), total_before in by_key_before.items():
         rows = recovered_rows.get(tbl_name, 0)
-        still_failed = by_table_after.get(tbl_name, 0)
-        db.log_pull_summary(tbl_name, "retry", started_at, finished_at, rows,
-                            total_before, still_failed, batch_id, request_id)
+        still_failed = by_key_after.get((tbl_name, param_type), 0)
+        db.update_latest_pull_log(tbl_name, param_type, rows, still_failed)
         logger.info(f"  {tbl_name}: {total_before - still_failed}/{total_before} pulih ({rows} baris)")
 
     n_failures = db.count_failures()
