@@ -349,8 +349,11 @@ Arti kolom `reason`:
 
 ### Pemulihan otomatis
 - Di **akhir setiap run**, item di `sync.pull_failures` dicoba ulang sekali — *full pull* tanpa filter incremental agar dijamin lengkap. Yang berhasil dihapus dari tabel.
-- Item yang masih gagal **tetap tersimpan** dan **dicoba lagi otomatis pada run terjadwal berikutnya**. Gap akan menutup sendiri saat sumber pulih — Anda cukup memantau apakah `sync.pull_failures` sudah kosong.
-- Untuk memaksa coba ulang segera (tanpa menunggu jadwal): jalankan `uv run python main.py --run-once`.
+- Kalau setelah itu **masih ada sisa gagal**, `--run-once` dan tiap iterasi `--loop` otomatis mencoba **satu kali lagi** lewat mode retry-only (lihat di bawah) — sebelum menunggu jadwal penuh berikutnya, yang bisa berjarak berhari-hari kalau jadwal akses Backbone jarang (mis. tanggal 14/28 tiap bulan, lihat §5.1). Tidak perlu tindakan manual; ini otomatis.
+- Item yang **masih gagal juga setelah itu** tetap tersimpan dan **dicoba lagi otomatis pada run terjadwal berikutnya**. Gap akan menutup sendiri saat sumber pulih — Anda cukup memantau apakah `sync.pull_failures` sudah kosong.
+- Untuk memaksa coba ulang segera secara manual — dua pilihan:
+  - `uv run python main.py --run-once` — jalankan siklus penuh (semua NPSN/wilayah/tabel, incremental) lalu retry-only otomatis kalau masih ada sisa. Durasinya mirip run terjadwal biasa.
+  - `uv run python main.py --retry-failed` — **hanya** retry item yang ada di `sync.pull_failures` saat itu (tanpa pass utama) — jauh lebih cepat, cocok kalau Anda tahu sisa gagalnya sedikit dan ingin membereskannya segera tanpa menunggu/menjalankan siklus penuh. Baris hasilnya tercatat di `sync.pull_log` dengan `param_type='retry'`.
 
 ### Tabel referensi (`PULL_REF=true`): download ZIP vs jalur lama per-tabel
 Saat `PULL_REF=true`, tabel referensi (`param_type=ref`) diambil lewat dua jalur, otomatis, **tanpa perlu konfigurasi tambahan**:
