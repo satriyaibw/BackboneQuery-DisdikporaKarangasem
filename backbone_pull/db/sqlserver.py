@@ -259,22 +259,34 @@ class SqlServerAdapter(DatabaseAdapter):
                 "  rows_received BIGINT NOT NULL DEFAULT 0,"
                 "  entities_total INT NOT NULL DEFAULT 0,"
                 "  entities_failed INT NOT NULL DEFAULT 0,"
-                "  status NVARCHAR(20) NOT NULL);"
+                "  status NVARCHAR(20) NOT NULL,"
+                "  request_expired_date DATETIME2 NULL,"
+                "  request_info NVARCHAR(MAX) NULL);"
             ))
+            # Migrasi tabel lama (dibuat sebelum kolom request_* ada).
+            existing = self.existing_columns(conn, self.schema_ctrl, "pull_log")
+            for col in ({"name": "request_expired_date", "type_name": "datetime2"},
+                       {"name": "request_info", "type_name": "ntext"}):
+                if col["name"].lower() not in existing:
+                    conn.execute(text(self.build_add_column_sql("pull_log", col, self.schema_ctrl)))
 
     def log_pull_summary(self, tbl_name, param_type, started_at, finished_at,
-                         rows_received, entities_total, entities_failed):
+                         rows_received, entities_total, entities_failed,
+                         request_expired_date=None, request_info=None):
         duration = (finished_at - started_at).total_seconds()
         status = "ok" if entities_failed == 0 else "incomplete"
         with self._engine.begin() as conn:
             conn.execute(text(
                 f"INSERT INTO [{self.schema_ctrl}].pull_log "
                 "(tbl_name, param_type, run_started_at, run_finished_at, duration_seconds, "
-                " rows_received, entities_total, entities_failed, status) "
-                "VALUES (:tbl, :pt, :started, :finished, :dur, :rows, :etotal, :efail, :status)"
+                " rows_received, entities_total, entities_failed, status, "
+                " request_expired_date, request_info) "
+                "VALUES (:tbl, :pt, :started, :finished, :dur, :rows, :etotal, :efail, :status, "
+                " :req_exp, :req_info)"
             ), {"tbl": tbl_name, "pt": param_type, "started": started_at, "finished": finished_at,
                 "dur": duration, "rows": rows_received, "etotal": entities_total,
-                "efail": entities_failed, "status": status})
+                "efail": entities_failed, "status": status,
+                "req_exp": request_expired_date, "req_info": request_info})
 
     def purge_old_pull_log(self, retention_days: int) -> int:
         with self._engine.begin() as conn:

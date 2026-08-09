@@ -107,7 +107,9 @@ class DatabaseAdapter(ABC):
     @abstractmethod
     def log_pull_summary(self, tbl_name: str, param_type: str, started_at: datetime,
                          finished_at: datetime, rows_received: int,
-                         entities_total: int, entities_failed: int): ...
+                         entities_total: int, entities_failed: int,
+                         request_expired_date: Optional[datetime] = None,
+                         request_info: Optional[str] = None): ...
 
     @abstractmethod
     def purge_old_pull_log(self, retention_days: int) -> int:

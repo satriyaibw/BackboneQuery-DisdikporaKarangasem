@@ -365,12 +365,15 @@ Setiap kali sebuah tabel selesai ditarik (per run), satu baris ringkasan dicatat
 
 ```sql
 SELECT tbl_name, param_type, run_started_at, run_finished_at, duration_seconds,
-       rows_received, entities_total, entities_failed, status
+       rows_received, entities_total, entities_failed, status,
+       request_expired_date, request_info
 FROM sync.pull_log
 ORDER BY run_started_at DESC;
 ```
 
 - Satu baris per **tabel per run** (bukan per NPSN/kecamatan/halaman), jadi volumenya kecil (maks puluhan–ratusan baris per run) dan tidak berdampak ke kecepatan penarikan.
 - `status` mencerminkan hasil **akhir** run (setelah pemulihan otomatis di bawah), bukan sekadar percobaan pertama: `ok` bila semua entity untuk tabel itu akhirnya lengkap; `incomplete` bila masih ada yang gagal sampai akhir run (lihat detailnya di `sync.pull_failures`). Baris ditulis sesaat setelah tabel itu ditarik, lalu **diperbarui otomatis** di akhir run begitu proses pemulihan (di bawah) selesai — jadi kalau suatu entity sempat gagal lalu berhasil dipulihkan pada run yang sama, `status`-nya akan berubah dari `incomplete` menjadi `ok` tanpa perlu tindakan manual.
+- **`request_expired_date`/`request_info`** mencatat sesi akses Backbone (`/user-info/request`) yang dipakai untuk pull itu — berguna untuk menelusuri apakah sekelompok kegagalan berkaitan dengan sesi tertentu (mis. sesi yang kedaluwarsa di tengah run). `request_expired_date` adalah `expired_date` sesi tsb. (bisa dibandingkan dengan `run_started_at`/`run_finished_at`); `request_info` adalah salinan mentah (JSON) seluruh field yang dikembalikan Backbone untuk sesi itu — isinya apa adanya dari API, tidak diasumsikan field tertentu di luar `expired_date`. Kosong (`NULL`) untuk baris dari run sebelum kolom ini ada.
+- Untuk instalasi yang sudah berjalan (`sync.pull_log` sudah ada dari sebelum kolom `request_expired_date`/`request_info` ditambahkan): kolom baru ini **ditambahkan otomatis** (`ALTER TABLE ... ADD`) di awal run berikutnya — tidak perlu migrasi manual, tidak ada downtime.
 - Baris lebih tua dari `PULL_LOG_RETENTION_DAYS` hari (default **60 hari**, ±2 bulan) **dihapus otomatis** di awal tiap run — tidak perlu pembersihan manual.
 - Detail per akses endpoint (tiap request HTTP) tetap tersedia di log Prefect/terminal (lihat `journalctl -u backbone-client-pull` bila dijalankan sebagai service, §5) — `sync.pull_log` hanya menyimpan ringkasannya agar hemat & cepat.
