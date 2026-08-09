@@ -76,4 +76,13 @@ class BackboneAPI:
 
     @staticmethod
     def is_sp_error(data: list) -> bool:
-        return bool(data and "keterangan" in data[0])
+        """Baris sentinel error SP (mis. {"total_rows": 0, "keterangan": "..."})
+        beda dari baris data biasa yang KEBETULAN punya kolom bisnis bernama
+        "keterangan" sendiri (mis. tabel registrasi_peserta_didik) -- baris data
+        asli selalu punya banyak kolom lain, sedang sentinel error hanya berisi
+        total_rows + keterangan (maks 2 kolom) dengan pesan yang benar-benar
+        terisi (bukan NULL/kosong seperti nilai bisnis biasa)."""
+        if not data:
+            return False
+        row = data[0]
+        return bool(row.get("keterangan")) and set(row.keys()) <= {"total_rows", "keterangan"}
