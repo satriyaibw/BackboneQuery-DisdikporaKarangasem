@@ -1,5 +1,6 @@
 import asyncio
 import json
+import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -51,6 +52,7 @@ def prepare_infrastructure():
     db.ensure_checkpoint_table()
     db.ensure_failures_table()
     db.ensure_pull_log_table()
+    db.ensure_pull_requests_table()
     purged = db.purge_old_pull_log(settings.pull_log_retention_days)
     if purged:
         logger.info(f"Log aktivitas lama dihapus: {purged} baris (retensi {settings.pull_log_retention_days} hari).")
@@ -152,8 +154,8 @@ async def get_wilayah_list() -> List[str]:
 
 @task(name="backbone-pull-sekolah", log_prints=True, retries=2, retry_delay_seconds=10)
 async def pull_sekolah(kode_wilayah_list: List[str], meta: dict,
-                       request_expired_date: Optional[datetime] = None,
-                       request_info: Optional[str] = None) -> Tuple[List[str], dict]:
+                       batch_id: Optional[str] = None,
+                       request_id: Optional[str] = None) -> Tuple[List[str], dict]:
     logger = get_run_logger()
     last_update = db.get_last_update("sekolah")
     schema_name = meta.get("schema_name", "dbo")
@@ -197,7 +199,7 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict,
         db.add_checkpoint_count("sekolah", total)
     db.log_pull_summary("sekolah", "wilayah", started_at, datetime.now(),
                         total, len(kode_wilayah_list), failed,
-                        request_expired_date, request_info)
+                        batch_id, request_id)
     logger.info(f"Sekolah: {len(npsn_list)} NPSN total")
     stats = {"tbl_name": "sekolah", "param_type": "wilayah", "run_started_at": started_at,
              "rows_received": total, "entities_failed": failed}
@@ -206,8 +208,8 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict,
 
 @task(name="backbone-pull-npsn", log_prints=True, retries=2, retry_delay_seconds=10)
 async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict,
-                       request_expired_date: Optional[datetime] = None,
-                       request_info: Optional[str] = None) -> dict:
+                       batch_id: Optional[str] = None,
+                       request_id: Optional[str] = None) -> dict:
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
     started_at = datetime.now()
@@ -239,7 +241,7 @@ async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict,
         db.add_checkpoint_count(tbl_name, total)
     db.log_pull_summary(tbl_name, "npsn", started_at, datetime.now(),
                         total, len(npsn_list), failed,
-                        request_expired_date, request_info)
+                        batch_id, request_id)
     logger.info(f"{tbl_name}: {total} baris diproses")
     return {"tbl_name": tbl_name, "param_type": "npsn", "run_started_at": started_at,
             "rows_received": total, "entities_failed": failed}
@@ -247,8 +249,8 @@ async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict,
 
 @task(name="backbone-pull-wilayah", log_prints=True, retries=2, retry_delay_seconds=10)
 async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dict,
-                          request_expired_date: Optional[datetime] = None,
-                          request_info: Optional[str] = None) -> dict:
+                          batch_id: Optional[str] = None,
+                          request_id: Optional[str] = None) -> dict:
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
     started_at = datetime.now()
@@ -280,7 +282,7 @@ async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dic
         db.add_checkpoint_count(tbl_name, total)
     db.log_pull_summary(tbl_name, "wilayah", started_at, datetime.now(),
                         total, len(kode_wilayah_list), failed,
-                        request_expired_date, request_info)
+                        batch_id, request_id)
     logger.info(f"{tbl_name}: {total} baris diproses")
     return {"tbl_name": tbl_name, "param_type": "wilayah", "run_started_at": started_at,
             "rows_received": total, "entities_failed": failed}
@@ -288,8 +290,8 @@ async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dic
 
 @task(name="backbone-pull-ref", log_prints=True, retries=2, retry_delay_seconds=10)
 async def pull_ref(tbl_name: str, meta: dict,
-                   request_expired_date: Optional[datetime] = None,
-                   request_info: Optional[str] = None) -> dict:
+                   batch_id: Optional[str] = None,
+                   request_id: Optional[str] = None) -> dict:
     logger = get_run_logger()
     last_update = db.get_last_update(tbl_name)
     started_at = datetime.now()
@@ -308,7 +310,7 @@ async def pull_ref(tbl_name: str, meta: dict,
         db.add_checkpoint_count(tbl_name, res.received)
     db.log_pull_summary(tbl_name, "ref", started_at, datetime.now(),
                         res.received, 1, 0 if res.ok else 1,
-                        request_expired_date, request_info)
+                        batch_id, request_id)
     logger.info(f"{tbl_name}: {res.received} baris diproses")
     return {"tbl_name": tbl_name, "param_type": "ref", "run_started_at": started_at,
             "rows_received": res.received, "entities_failed": 0 if res.ok else 1}
@@ -316,8 +318,8 @@ async def pull_ref(tbl_name: str, meta: dict,
 
 @task(name="backbone-pull-ref-bulk", log_prints=True)
 async def pull_ref_bulk(tbl_ref: Dict[str, dict],
-                        request_expired_date: Optional[datetime] = None,
-                        request_info: Optional[str] = None) -> Tuple[List[dict], set]:
+                        batch_id: Optional[str] = None,
+                        request_id: Optional[str] = None) -> Tuple[List[dict], set]:
     """Coba muat semua tabel referensi sekaligus lewat GET /referensi/download
     (ZIP: satu CSV per tabel + manifest.json) — jauh lebih hemat request
     dibanding /referensi per tabel berpaginasi. Best-effort: kegagalan apa pun
@@ -361,7 +363,7 @@ async def pull_ref_bulk(tbl_ref: Dict[str, dict],
             db.set_last_update(tbl_name, finished_at)
             db.add_checkpoint_count(tbl_name, total)
         db.log_pull_summary(tbl_name, "ref", started_at, finished_at, total, 1, 0,
-                            request_expired_date, request_info)
+                            batch_id, request_id)
         logger.info(f"{tbl_name}: {total} baris dimuat lewat download ZIP referensi")
         stats.append({"tbl_name": tbl_name, "param_type": "ref", "run_started_at": started_at,
                       "rows_received": total, "entities_failed": 0})
@@ -412,17 +414,20 @@ async def retry_failed(tables: Dict[str, dict]) -> Dict[str, int]:
 async def backbone_client_pull():
     logger = get_run_logger()
     logger.info(f"▶ Mulai penarikan data Backbone — {datetime.now():%Y-%m-%d %H:%M}")
+    batch_id = str(uuid.uuid4())
     prepare_infrastructure()
     await get_access_token()
     request_data = await create_request()
-    request_expired_date = None
-    exp_raw = request_data.get("expired_date") if isinstance(request_data, dict) else None
-    if exp_raw:
-        try:
-            request_expired_date = datetime.fromisoformat(exp_raw)
-        except (TypeError, ValueError):
-            request_expired_date = None
-    request_info = json.dumps(request_data, default=str) if request_data else None
+    request_id = request_data.get("request_id") if isinstance(request_data, dict) else None
+    if request_id:
+        expired_date = None
+        exp_raw = request_data.get("expired_date")
+        if exp_raw:
+            try:
+                expired_date = datetime.fromisoformat(exp_raw)
+            except (TypeError, ValueError):
+                expired_date = None
+        db.upsert_pull_request(request_id, expired_date, json.dumps(request_data, default=str))
     tables = await get_metadata()
     if not tables:
         logger.warning("Metadata kosong, tidak ada tabel yang dapat ditarik.")
@@ -437,28 +442,28 @@ async def backbone_client_pull():
         "pk_columns": ["sekolah_id"], "col_defs": [],
     })
     npsn_list, sekolah_stats = await pull_sekolah(kode_wilayah_list, sekolah_meta,
-                                                  request_expired_date, request_info)
+                                                  batch_id, request_id)
     run_stats: List[dict] = [sekolah_stats]
     tbl_npsn, tbl_wilayah, tbl_ref = route_tables(tables)
     if npsn_list:
         for tbl_name, meta in tbl_npsn.items():
             logger.info(f"Tarik (npsn) → [{meta['schema_name']}].[{tbl_name}]")
             run_stats.append(await pull_by_npsn(tbl_name, npsn_list, meta,
-                                                request_expired_date, request_info))
+                                                batch_id, request_id))
     else:
         logger.warning("NPSN list kosong, lewati tabel param_type='npsn'.")
     for tbl_name, meta in tbl_wilayah.items():
         logger.info(f"Tarik (wilayah) → [{meta['schema_name']}].[{tbl_name}]")
         run_stats.append(await pull_by_wilayah(tbl_name, kode_wilayah_list, meta,
-                                               request_expired_date, request_info))
+                                               batch_id, request_id))
     if settings.pull_ref:
-        bulk_stats, bulk_loaded = await pull_ref_bulk(tbl_ref, request_expired_date, request_info)
+        bulk_stats, bulk_loaded = await pull_ref_bulk(tbl_ref, batch_id, request_id)
         run_stats.extend(bulk_stats)
         for tbl_name, meta in tbl_ref.items():
             if tbl_name in bulk_loaded:
                 continue
             logger.info(f"Tarik (ref) → [{meta['schema_name']}].[{tbl_name}]")
-            run_stats.append(await pull_ref(tbl_name, meta, request_expired_date, request_info))
+            run_stats.append(await pull_ref(tbl_name, meta, batch_id, request_id))
 
     # Retry lalu perbarui pull_log tiap tabel dengan hasil AKHIR (bukan snapshot
     # sebelum retry) — dibaca ulang dari pull_failures yang tersisa, bukan

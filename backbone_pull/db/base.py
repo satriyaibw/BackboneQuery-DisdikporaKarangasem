@@ -108,13 +108,21 @@ class DatabaseAdapter(ABC):
     def log_pull_summary(self, tbl_name: str, param_type: str, started_at: datetime,
                          finished_at: datetime, rows_received: int,
                          entities_total: int, entities_failed: int,
-                         request_expired_date: Optional[datetime] = None,
-                         request_info: Optional[str] = None): ...
+                         batch_id: Optional[str] = None,
+                         request_id: Optional[str] = None): ...
 
     @abstractmethod
     def purge_old_pull_log(self, retention_days: int) -> int:
         """Hapus baris pull_log lebih tua dari retention_days; kembalikan jumlah baris dihapus."""
         ...
+
+    # ── info sesi request Backbone (satu baris per request_id) ─────────────
+    @abstractmethod
+    def ensure_pull_requests_table(self): ...
+
+    @abstractmethod
+    def upsert_pull_request(self, request_id: str, expired_date: Optional[datetime],
+                            raw_info: str): ...
 
     # ── konversi nilai (bersama) ───────────────────────────────────────────
     @staticmethod

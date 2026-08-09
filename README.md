@@ -314,7 +314,7 @@ Secara default, `docker-compose.yml` sudah membuka port 4200 ke semua interface 
   PostgreSQL tidak mengizinkan `CREATE DATABASE` dijalankan dari koneksi ke database yang sama; karena itu proses auto-create untuk `DB_DIALECT=postgres` membuka koneksi terpisah ke database maintenance (`DB_MAINTENANCE_DB`, default `postgres`) untuk menjalankan `CREATE DATABASE`. Pastikan database maintenance tersebut ada dan user punya akses ke sana. (Untuk `DB_DIALECT=sqlserver`, koneksi maintenance memakai database `master` bawaan; untuk `DB_DIALECT=mysql`, koneksi maintenance connect ke server tanpa memilih database awal — keduanya tidak dikonfigurasi lewat `.env`.)
 
 - **MySQL: satu database, tabel diberi prefix schema**
-  MySQL tidak punya konsep schema-dalam-database. Semua `schema_name` Backbone digabung ke satu database (`DB_NAME`) dengan nama tabel diberi prefix schema-nya (mis. `dbo.sekolah` → `dbo_sekolah`, `vld.v_ptk` → `vld_v_ptk`). Tabel kontrol (`sync.pull_checkpoint`, `sync.pull_failures`, `sync.pull_log`) mengikuti pola yang sama → `sync_pull_checkpoint`, `sync_pull_failures`, `sync_pull_log`. Butuh **MySQL 8.0+**.
+  MySQL tidak punya konsep schema-dalam-database. Semua `schema_name` Backbone digabung ke satu database (`DB_NAME`) dengan nama tabel diberi prefix schema-nya (mis. `dbo.sekolah` → `dbo_sekolah`, `vld.v_ptk` → `vld_v_ptk`). Tabel kontrol (`sync.pull_checkpoint`, `sync.pull_failures`, `sync.pull_log`, `sync.pull_requests`) mengikuti pola yang sama → `sync_pull_checkpoint`, `sync_pull_failures`, `sync_pull_log`, `sync_pull_requests`. Butuh **MySQL 8.0+**.
 
 - **Port default berbeda per dialect**
   `.env.example` mengisi `DB_PORT=1433` (port default SQL Server). Jika `DB_DIALECT=postgres`, ubah `DB_PORT` menjadi `5432`; jika `DB_DIALECT=mysql`, ubah menjadi `3306` — atau sesuaikan dengan port kustom server database Anda.
@@ -329,7 +329,7 @@ Secara default, `docker-compose.yml` sudah membuka port 4200 ke semua interface 
 
 Penarikan ini memverifikasi kelengkapan secara otomatis, sehingga status run bisa dipercaya:
 
-> Contoh query di bawah pakai notasi `sync.pull_failures`/`sync.pull_log` (SQL Server/PostgreSQL). **Untuk `DB_DIALECT=mysql`**, ganti dengan nama tabel prefix-schema-nya: `sync_pull_failures` dan `sync_pull_log` (tanpa titik) — lihat §7.
+> Contoh query di bawah pakai notasi `sync.pull_failures`/`sync.pull_log`/`sync.pull_requests` (SQL Server/PostgreSQL). **Untuk `DB_DIALECT=mysql`**, ganti dengan nama tabel prefix-schema-nya: `sync_pull_failures`, `sync_pull_log`, `sync_pull_requests` (tanpa titik) — lihat §7.
 
 - **Run HIJAU (sukses) = data 100% lengkap.** Untuk tiap entity (NPSN / kecamatan) × tabel, jumlah baris yang diterima dibandingkan dengan `total_rows` yang dilaporkan API. Bila semua cocok dan tanpa error, run sukses.
 - **Run MERAH (gagal) = ada yang belum lengkap.** Flow sengaja digagalkan di akhir bila masih ada item yang belum lengkap — jadi terlihat jelas di Prefect UI / *exit code*, bukan "hijau palsu".
@@ -366,14 +366,27 @@ Setiap kali sebuah tabel selesai ditarik (per run), satu baris ringkasan dicatat
 ```sql
 SELECT tbl_name, param_type, run_started_at, run_finished_at, duration_seconds,
        rows_received, entities_total, entities_failed, status,
-       request_expired_date, request_info
+       batch_id, request_id
 FROM sync.pull_log
 ORDER BY run_started_at DESC;
 ```
 
 - Satu baris per **tabel per run** (bukan per NPSN/kecamatan/halaman), jadi volumenya kecil (maks puluhan–ratusan baris per run) dan tidak berdampak ke kecepatan penarikan.
 - `status` mencerminkan hasil **akhir** run (setelah pemulihan otomatis di bawah), bukan sekadar percobaan pertama: `ok` bila semua entity untuk tabel itu akhirnya lengkap; `incomplete` bila masih ada yang gagal sampai akhir run (lihat detailnya di `sync.pull_failures`). Baris ditulis sesaat setelah tabel itu ditarik, lalu **diperbarui otomatis** di akhir run begitu proses pemulihan (di bawah) selesai — jadi kalau suatu entity sempat gagal lalu berhasil dipulihkan pada run yang sama, `status`-nya akan berubah dari `incomplete` menjadi `ok` tanpa perlu tindakan manual.
-- **`request_expired_date`/`request_info`** mencatat sesi akses Backbone (`/user-info/request`) yang dipakai untuk pull itu — berguna untuk menelusuri apakah sekelompok kegagalan berkaitan dengan sesi tertentu (mis. sesi yang kedaluwarsa di tengah run). `request_expired_date` adalah `expired_date` sesi tsb. (bisa dibandingkan dengan `run_started_at`/`run_finished_at`); `request_info` adalah salinan mentah (JSON) seluruh field yang dikembalikan Backbone untuk sesi itu — isinya apa adanya dari API, tidak diasumsikan field tertentu di luar `expired_date`. Kosong (`NULL`) untuk baris dari run sebelum kolom ini ada.
-- Untuk instalasi yang sudah berjalan (`sync.pull_log` sudah ada dari sebelum kolom `request_expired_date`/`request_info` ditambahkan): kolom baru ini **ditambahkan otomatis** (`ALTER TABLE ... ADD`) di awal run berikutnya — tidak perlu migrasi manual, tidak ada downtime.
+- **`batch_id`** — UUID yang dibuat sekali di awal tiap run dan sama untuk semua baris `pull_log` dari run itu; dipakai untuk mengelompokkan "semua tabel yang ditarik dalam satu run yang sama" tanpa perlu mencocokkan `run_started_at` antar tabel (yang nilainya sedikit berbeda per tabel).
+- **`request_id`** — ID sesi akses Backbone (`/user-info/request`) yang dipakai untuk pull itu; berguna untuk menelusuri apakah sekelompok kegagalan berkaitan dengan sesi tertentu (mis. sesi yang kedaluwarsa di tengah run). Detail lengkap sesi itu (termasuk `expired_date`) ada di tabel **`sync.pull_requests`** (lihat di bawah) — join lewat `request_id` bila perlu.
+- Untuk instalasi yang sudah berjalan (`sync.pull_log` sudah ada dari sebelum kolom `batch_id`/`request_id` ditambahkan): kolom baru ini **ditambahkan otomatis** (`ALTER TABLE ... ADD`) di awal run berikutnya — tidak perlu migrasi manual, tidak ada downtime.
 - Baris lebih tua dari `PULL_LOG_RETENTION_DAYS` hari (default **60 hari**, ±2 bulan) **dihapus otomatis** di awal tiap run — tidak perlu pembersihan manual.
 - Detail per akses endpoint (tiap request HTTP) tetap tersedia di log Prefect/terminal (lihat `journalctl -u backbone-client-pull` bila dijalankan sebagai service, §5) — `sync.pull_log` hanya menyimpan ringkasannya agar hemat & cepat.
+
+### Info sesi request Backbone (`sync.pull_requests`)
+Satu baris per `request_id` (bukan per run — sesi yang sama dipakai ulang selama masih berlaku akan meng-update baris yang sama, bukan menambah baris baru):
+
+```sql
+SELECT request_id, expired_date, raw_info, first_seen_at, last_used_at
+FROM sync.pull_requests
+ORDER BY last_used_at DESC;
+```
+
+- `raw_info` adalah salinan mentah (JSON) seluruh field yang dikembalikan Backbone untuk sesi itu — apa adanya dari API, tidak diasumsikan field tertentu di luar `request_id`/`expired_date`.
+- `last_used_at` ter-update tiap kali sesi itu dipakai lagi di run berikutnya (selama belum `expired_date`) — jadi baris ini juga menunjukkan kapan terakhir kali sesi itu masih dipakai.

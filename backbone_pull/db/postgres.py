@@ -260,19 +260,19 @@ class PostgresAdapter(DatabaseAdapter):
                 '  entities_total int NOT NULL DEFAULT 0,'
                 '  entities_failed int NOT NULL DEFAULT 0,'
                 '  status varchar(20) NOT NULL,'
-                '  request_expired_date timestamp NULL,'
-                '  request_info text NULL);'
+                '  batch_id varchar(36) NULL,'
+                '  request_id varchar(100) NULL);'
             ))
-            # Migrasi tabel lama (dibuat sebelum kolom request_* ada).
+            # Migrasi tabel lama (dibuat sebelum kolom batch_id/request_id ada).
             existing = self.existing_columns(conn, self.schema_ctrl, "pull_log")
-            for col in ({"name": "request_expired_date", "type_name": "datetime2"},
-                       {"name": "request_info", "type_name": "ntext"}):
+            for col in ({"name": "batch_id", "type_name": "nvarchar", "type_length": 36},
+                       {"name": "request_id", "type_name": "nvarchar", "type_length": 100}):
                 if col["name"].lower() not in existing:
                     conn.execute(text(self.build_add_column_sql("pull_log", col, self.schema_ctrl)))
 
     def log_pull_summary(self, tbl_name, param_type, started_at, finished_at,
                          rows_received, entities_total, entities_failed,
-                         request_expired_date=None, request_info=None):
+                         batch_id=None, request_id=None):
         duration = (finished_at - started_at).total_seconds()
         status = "ok" if entities_failed == 0 else "incomplete"
         with self._engine.begin() as conn:
@@ -280,13 +280,36 @@ class PostgresAdapter(DatabaseAdapter):
                 f'INSERT INTO "{self.schema_ctrl}"."pull_log" '
                 "(tbl_name, param_type, run_started_at, run_finished_at, duration_seconds, "
                 " rows_received, entities_total, entities_failed, status, "
-                " request_expired_date, request_info) "
+                " batch_id, request_id) "
                 "VALUES (:tbl, :pt, :started, :finished, :dur, :rows, :etotal, :efail, :status, "
-                " :req_exp, :req_info)"
+                " :batch, :reqid)"
             ), {"tbl": tbl_name, "pt": param_type, "started": started_at, "finished": finished_at,
                 "dur": duration, "rows": rows_received, "etotal": entities_total,
                 "efail": entities_failed, "status": status,
-                "req_exp": request_expired_date, "req_info": request_info})
+                "batch": batch_id, "reqid": request_id})
+
+    # ── info sesi request Backbone (satu baris per request_id) ─────────────
+    def ensure_pull_requests_table(self):
+        self.ensure_schema(self.schema_ctrl)
+        with self._engine.begin() as conn:
+            conn.execute(text(
+                f'CREATE TABLE IF NOT EXISTS "{self.schema_ctrl}"."pull_requests" ('
+                '  request_id varchar(100) PRIMARY KEY,'
+                '  expired_date timestamp NULL,'
+                '  raw_info text NULL,'
+                '  first_seen_at timestamp NOT NULL DEFAULT NOW(),'
+                '  last_used_at timestamp NOT NULL DEFAULT NOW());'
+            ))
+
+    def upsert_pull_request(self, request_id, expired_date, raw_info):
+        with self._engine.begin() as conn:
+            conn.execute(text(
+                f'INSERT INTO "{self.schema_ctrl}"."pull_requests" '
+                "(request_id, expired_date, raw_info) VALUES (:rid, :exp, :info) "
+                "ON CONFLICT (request_id) DO UPDATE SET "
+                "expired_date = EXCLUDED.expired_date, raw_info = EXCLUDED.raw_info, "
+                "last_used_at = NOW()"
+            ), {"rid": request_id, "exp": expired_date, "info": raw_info})
 
     def purge_old_pull_log(self, retention_days: int) -> int:
         with self._engine.begin() as conn:
