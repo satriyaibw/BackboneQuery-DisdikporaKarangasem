@@ -328,3 +328,17 @@ class PostgresAdapter(DatabaseAdapter):
                 "WHERE tbl_name = :tbl AND param_type = :pt AND run_started_at = :started"
             ), {"rows": rows_received, "efail": entities_failed, "status": status,
                 "tbl": tbl_name, "pt": param_type, "started": run_started_at})
+
+    def update_latest_pull_log(self, tbl_name, param_type, additional_rows_received, entities_failed):
+        status = "ok" if entities_failed == 0 else "incomplete"
+        with self._engine.begin() as conn:
+            conn.execute(text(
+                f'UPDATE "{self.schema_ctrl}"."pull_log" '
+                "SET rows_received = rows_received + :add_rows, entities_failed = :efail, status = :status "
+                f'WHERE id = ('
+                f'  SELECT id FROM "{self.schema_ctrl}"."pull_log" '
+                "  WHERE tbl_name = :tbl AND param_type = :pt "
+                "  ORDER BY run_started_at DESC LIMIT 1"
+                ")"
+            ), {"add_rows": additional_rows_received, "efail": entities_failed, "status": status,
+                "tbl": tbl_name, "pt": param_type})

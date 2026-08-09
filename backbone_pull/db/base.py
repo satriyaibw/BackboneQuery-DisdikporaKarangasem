@@ -116,6 +116,17 @@ class DatabaseAdapter(ABC):
         """Hapus baris pull_log lebih tua dari retention_days; kembalikan jumlah baris dihapus."""
         ...
 
+    @abstractmethod
+    def update_latest_pull_log(self, tbl_name: str, param_type: str,
+                               additional_rows_received: int, entities_failed: int):
+        """Koreksi baris pull_log TERBARU untuk (tbl_name, param_type) -- dipakai
+        retry_failed_only (main.py --retry-failed / auto-chain) yang berjalan di
+        invocation TERPISAH dari run asal, jadi tidak punya run_started_at run
+        asal untuk update_pull_log() biasa. additional_rows_received ditambahkan
+        ke rows_received yang sudah ada (bukan menggantikan); entities_failed
+        menggantikan nilai lama (jumlah akhir yang sebenarnya, sudah pasti)."""
+        ...
+
     # ── info sesi request Backbone (satu baris per request_id) ─────────────
     @abstractmethod
     def ensure_pull_requests_table(self): ...
