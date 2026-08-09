@@ -107,6 +107,27 @@ async def create_request():
     raise RuntimeError(f"Tidak ada request akses aktif dan gagal membuat baru: {create_err}")
 
 
+async def _authenticate_and_get_metadata() -> Tuple[Dict[str, dict], Optional[str]]:
+    """Ambil access-token, buat/pakai-ulang request akses (simpan sesinya ke
+    sync.pull_requests), lalu ambil metadata tabel — urutan setup yang sama
+    dibutuhkan flow utama maupun retry_failed_only sebelum bisa memanggil
+    endpoint data. Kembalikan (tables, request_id)."""
+    await get_access_token()
+    request_data = await create_request()
+    request_id = request_data.get("request_id") if isinstance(request_data, dict) else None
+    if request_id:
+        expired_date = None
+        exp_raw = request_data.get("expired_date")
+        if exp_raw:
+            try:
+                expired_date = datetime.fromisoformat(exp_raw)
+            except (TypeError, ValueError):
+                expired_date = None
+        db.upsert_pull_request(request_id, expired_date, json.dumps(request_data, default=str))
+    tables = await get_metadata()
+    return tables, request_id
+
+
 @task(name="backbone-get-metadata", log_prints=True, retries=2, retry_delay_seconds=5)
 async def get_metadata() -> Dict[str, dict]:
     logger = get_run_logger()
@@ -416,19 +437,7 @@ async def backbone_client_pull():
     logger.info(f"▶ Mulai penarikan data Backbone — {datetime.now():%Y-%m-%d %H:%M}")
     batch_id = str(uuid.uuid4())
     prepare_infrastructure()
-    await get_access_token()
-    request_data = await create_request()
-    request_id = request_data.get("request_id") if isinstance(request_data, dict) else None
-    if request_id:
-        expired_date = None
-        exp_raw = request_data.get("expired_date")
-        if exp_raw:
-            try:
-                expired_date = datetime.fromisoformat(exp_raw)
-            except (TypeError, ValueError):
-                expired_date = None
-        db.upsert_pull_request(request_id, expired_date, json.dumps(request_data, default=str))
-    tables = await get_metadata()
+    tables, request_id = await _authenticate_and_get_metadata()
     if not tables:
         logger.warning("Metadata kosong, tidak ada tabel yang dapat ditarik.")
         return
@@ -482,3 +491,52 @@ async def backbone_client_pull():
     n_failures = db.count_failures()
     assert_complete(n_failures)
     logger.info(f"✓ Selesai — 100% lengkap — {datetime.now():%Y-%m-%d %H:%M}")
+
+
+@flow(name="backbone-client-retry-failed", log_prints=True)
+async def retry_failed_only():
+    """Coba ulang HANYA item yang tersisa di sync.pull_failures — tanpa pass
+    utama (semua NPSN/wilayah/tabel) seperti backbone_client_pull. Jauh lebih
+    cepat, dipakai main.py sebagai percobaan tambahan segera setelah --run-once
+    atau satu iterasi --loop masih menyisakan failure, tanpa menunggu jadwal
+    penuh berikutnya (yang bisa berjarak berhari-hari kalau jadwal Backbone
+    jarang, mis. tanggal 14/28)."""
+    logger = get_run_logger()
+    prepare_infrastructure()
+
+    failures_before = db.list_failures()
+    if not failures_before:
+        logger.info("Tidak ada item di sync.pull_failures — tidak ada yang perlu di-retry.")
+        return
+
+    by_table_before: Dict[str, int] = {}
+    for f in failures_before:
+        by_table_before[f["tbl_name"]] = by_table_before.get(f["tbl_name"], 0) + 1
+    logger.info(f"▶ Retry-only: {len(failures_before)} item gagal di "
+                f"{len(by_table_before)} tabel — {datetime.now():%Y-%m-%d %H:%M}")
+
+    batch_id = str(uuid.uuid4())
+    tables, request_id = await _authenticate_and_get_metadata()
+    if not tables:
+        logger.warning("Metadata kosong, tidak bisa retry.")
+        return
+
+    started_at = datetime.now()
+    recovered_rows = await retry_failed(tables)
+    finished_at = datetime.now()
+
+    by_table_after: Dict[str, int] = {}
+    for f in db.list_failures():
+        by_table_after[f["tbl_name"]] = by_table_after.get(f["tbl_name"], 0) + 1
+
+    for tbl_name, total_before in by_table_before.items():
+        rows = recovered_rows.get(tbl_name, 0)
+        still_failed = by_table_after.get(tbl_name, 0)
+        db.log_pull_summary(tbl_name, "retry", started_at, finished_at, rows,
+                            total_before, still_failed, batch_id, request_id)
+        logger.info(f"  {tbl_name}: {total_before - still_failed}/{total_before} pulih ({rows} baris)")
+
+    n_failures = db.count_failures()
+    assert_complete(n_failures)
+    logger.info(f"✓ Retry-only selesai — {len(failures_before) - n_failures}/{len(failures_before)} pulih "
+               f"— {datetime.now():%Y-%m-%d %H:%M}")

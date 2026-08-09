@@ -12,7 +12,7 @@ import aiohttp  # noqa: E402
 from prefect.schedules import Cron  # noqa: E402
 
 from backbone_pull.config import load_settings  # noqa: E402
-from backbone_pull.flow import api, backbone_client_pull  # noqa: E402
+from backbone_pull.flow import api, backbone_client_pull, retry_failed_only  # noqa: E402
 from backbone_pull.schedule_source import (  # noqa: E402
     build_cron_from_dates,
     extract_time_of_day,
@@ -28,6 +28,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--loop", action="store_true",
                    help="Jalankan flow berulang sesuai SCHEDULE_CRON/SCHEDULE_TIMEZONE "
                         "di .env.")
+    p.add_argument("--retry-failed", action="store_true",
+                   help="Jalankan HANYA retry item yang tersisa di sync.pull_failures "
+                        "(cepat, tanpa pass utama semua NPSN/wilayah/tabel), lalu keluar.")
     return p
 
 
@@ -94,14 +97,30 @@ def run_loop(s):
         except Exception as e:  # noqa: BLE001
             # Jangan biarkan satu kegagalan menghentikan proses — lanjut ke jadwal berikutnya.
             print(f"Eksekusi GAGAL: {e}\n", flush=True)
+            print("[*] Masih ada failure tersisa — coba retry-only sekali lagi "
+                  "(cepat, tanpa menunggu jadwal berikutnya)...", flush=True)
+            try:
+                asyncio.run(retry_failed_only())
+                print("Retry-only selesai.\n", flush=True)
+            except Exception as e2:  # noqa: BLE001
+                print(f"Retry-only GAGAL juga: {e2}\n", flush=True)
 
 
 def main():
     args = build_parser().parse_args()
     s = load_settings()
 
+    if args.retry_failed:
+        asyncio.run(retry_failed_only())
+        return
+
     if args.run_once:
-        asyncio.run(backbone_client_pull())
+        try:
+            asyncio.run(backbone_client_pull())
+        except Exception as e:  # noqa: BLE001
+            print(f"[!] Run utama masih menyisakan failure ({e}) — coba retry-only "
+                  "sekali lagi...", flush=True)
+            asyncio.run(retry_failed_only())
         return
 
     if args.loop:
