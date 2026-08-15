@@ -52,8 +52,19 @@ Database tujuan dipilih lewat `DB_DIALECT` (`sqlserver`, `postgres`, atau `mysql
 
 ## 3. Langkah Instalasi
 
+### 3.1 Dapatkan akses repo
+
+Repo proyek ini **privat** — dibagikan ke tiap client lewat **deploy token** GitLab (kredensial read-only khusus untuk `git clone`/`git pull`, bukan akun login GitLab biasa). Pengelola pusat (Kemendikdasmen) akan mengirimkan:
+
+- **Username token**, mis. `client-namakabupaten`
+- **Token**, berupa string acak panjang
+
+**Jaga kerahasiaan kredensial ini** — jangan diteruskan ke pihak di luar tim teknis Anda, jangan dikirim lewat kanal tidak terenkripsi, dan jangan commit ke repo lain. Tiap client menerima token yang **berbeda**, jadi bisa dicabut/diganti sendiri-sendiri oleh pengelola pusat tanpa mengganggu client lain — kalau token Anda kedaluwarsa atau perlu diganti, hubungi pengelola pusat untuk token baru.
+
+### 3.2 Clone & instalasi
+
 ```bash
-git clone <repo> backbone-client-pull   # atau salin folder proyek
+git clone https://<username-token>:<token>@dev.kemendikdasmen.go.id/data-pendidikan/interoperabilitas/backbone-client.git
 cd backbone-client-pull
 
 uv sync
@@ -71,6 +82,7 @@ Catatan:
 - `uv run python -m backbone_pull.check` mencetak ringkasan konfigurasi lalu menguji koneksi database dan koneksi API Backbone (buat *request* akses). Pastikan semuanya `[ OK ]` sebelum lanjut.
 - `uv run python main.py --run-once` menjalankan satu siklus penarikan penuh secara langsung (tanpa scheduler) — cocok untuk uji coba awal atau uji manual.
 - `uv run python main.py` (tanpa argumen) menjalankan proses jangka panjang yang mendaftarkan jadwal (`SCHEDULE_CRON`) lewat Prefect `serve` dan menunggu di foreground. Untuk produksi, jalankan ini sebagai *service* (lihat §5).
+- **Update ke versi terbaru**: jalankan `git pull` di dalam folder proyek kapan saja (kredensial deploy token yang sama tetap berlaku selama belum kedaluwarsa/dicabut — tidak perlu clone ulang), lalu `uv sync` ulang kalau ada dependensi baru. Kalau sedang berjalan sebagai *service* (§5), restart service-nya setelah `git pull` agar perubahan terpakai.
 
 ## 4. Konfigurasi `.env`
 
