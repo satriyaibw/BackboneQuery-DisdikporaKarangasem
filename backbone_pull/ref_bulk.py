@@ -12,10 +12,13 @@ jatuh ke jalur lama (per-tabel) bila tidak tersedia di ZIP.
 import csv
 import io
 import json
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from zipfile import ZipFile
 
 import aiohttp
+
+REF_BULK_CHECKPOINT_KEY = "__referensi_bulk__"
 
 
 async def download_referensi_zip(session, api, logger=None) -> Optional[bytes]:
@@ -65,3 +68,15 @@ def parse_referensi_zip(zip_bytes: bytes) -> Tuple[Dict[str, List[dict]], dict]:
                 for row in reader
             ]
     return tables, manifest
+
+
+def get_manifest_generated_at(manifest: dict) -> Optional[datetime]:
+    """Parse manifest['generated_at'] (ISO8601, diisi server saat generate ZIP)
+    jadi datetime. None kalau field-nya tidak ada / tidak valid (server lama)."""
+    raw = manifest.get("generated_at")
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except (ValueError, TypeError):
+        return None

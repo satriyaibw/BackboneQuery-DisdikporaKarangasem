@@ -2,12 +2,13 @@ import asyncio
 import csv
 import io
 import json
+from datetime import datetime
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import aiohttp
 import pytest
 
-from backbone_pull.ref_bulk import download_referensi_zip, parse_referensi_zip
+from backbone_pull.ref_bulk import download_referensi_zip, get_manifest_generated_at, parse_referensi_zip
 
 
 def _build_zip(tables: dict, manifest=None) -> bytes:
@@ -125,3 +126,17 @@ def test_download_referensi_zip_network_error_returns_none():
     session = _FakeSession(exc=aiohttp.ClientConnectionError("boom"))
     result = asyncio.run(download_referensi_zip(session, _FakeAPI()))
     assert result is None
+
+
+# ── get_manifest_generated_at ────────────────────────────────────────────
+def test_get_manifest_generated_at_parses_iso8601():
+    result = get_manifest_generated_at({"generated_at": "2026-08-08T18:49:12.858879+00:00"})
+    assert result == datetime.fromisoformat("2026-08-08T18:49:12.858879+00:00")
+
+
+def test_get_manifest_generated_at_missing_field_returns_none():
+    assert get_manifest_generated_at({}) is None
+
+
+def test_get_manifest_generated_at_invalid_value_returns_none():
+    assert get_manifest_generated_at({"generated_at": "not-a-date"}) is None

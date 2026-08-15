@@ -12,7 +12,12 @@ from .api import BackboneAPI
 from .config import load_settings
 from .db import get_adapter
 from .puller import pull_paginated
-from .ref_bulk import download_referensi_zip, parse_referensi_zip
+from .ref_bulk import (
+    REF_BULK_CHECKPOINT_KEY,
+    download_referensi_zip,
+    get_manifest_generated_at,
+    parse_referensi_zip,
+)
 from .request_info import pick_active_request
 from .routing import route_tables
 from .throttle import RateLimiter
@@ -363,6 +368,23 @@ async def pull_ref_bulk(tbl_ref: Dict[str, dict],
         logger.warning(f"Gagal membaca ZIP referensi: {e} — pakai jalur lama (per-tabel).")
         return stats, loaded
 
+    # Skip import kalau prefill belum berubah sejak run terakhir (bandingkan
+    # manifest['generated_at'] server terhadap checkpoint tersimpan). Catatan:
+    # get_last_update() cuma presisi tanggal (bukan jam) — cukup untuk kasus
+    # normal (referensi jarang di-generate ulang, jauh lebih jarang dari
+    # sekali per hari), tapi kalau server di-generate ulang 2x di HARI YANG
+    # SAMA, perubahan kedua baru ke-pick-up di run setelah tanggal berganti.
+    generated_at = get_manifest_generated_at(manifest)
+    if generated_at is not None:
+        last_checkpoint = db.get_last_update(REF_BULK_CHECKPOINT_KEY)
+        if last_checkpoint is not None and last_checkpoint == str(generated_at.date()):
+            loaded = {tbl_name for tbl_name in tables_rows if tbl_name in tbl_ref}
+            logger.info(
+                f"Referensi belum berubah sejak {last_checkpoint} "
+                f"(manifest generated_at={generated_at}) — skip import {len(loaded)} tabel."
+            )
+            return stats, loaded
+
     expected_counts = {t["tbl_name"]: t.get("row_count") for t in manifest.get("tables", [])}
     for tbl_name, rows in tables_rows.items():
         meta = tbl_ref.get(tbl_name)
@@ -389,6 +411,10 @@ async def pull_ref_bulk(tbl_ref: Dict[str, dict],
         stats.append({"tbl_name": tbl_name, "param_type": "ref", "run_started_at": started_at,
                       "rows_received": total, "entities_failed": 0})
         loaded.add(tbl_name)
+
+    if generated_at is not None:
+        db.set_last_update(REF_BULK_CHECKPOINT_KEY, generated_at)
+
     return stats, loaded
 
 
