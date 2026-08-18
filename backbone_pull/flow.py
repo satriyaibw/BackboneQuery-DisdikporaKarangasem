@@ -11,6 +11,7 @@ from prefect.logging import get_run_logger
 from .api import BackboneAPI
 from .config import load_settings
 from .db import get_adapter
+from .delta import resolve_npsn_list
 from .puller import pull_paginated
 from .ref_bulk import (
     REF_BULK_CHECKPOINT_KEY,
@@ -245,6 +246,9 @@ async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict,
     failed = 0
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
+        effective_npsn_list = await resolve_npsn_list(
+            api, session, tbl_name, last_update, npsn_list, logger)
+
         async def _one(npsn):
             nonlocal total, failed
             async with sem:
@@ -261,14 +265,14 @@ async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict,
                         failed += 1
                         await asyncio.to_thread(db.record_failure, tbl_name, "npsn", npsn,
                                                 res.reason, res.detail, res.expected, res.received)
-        await asyncio.gather(*[_one(n) for n in npsn_list])
+        await asyncio.gather(*[_one(n) for n in effective_npsn_list])
     if total:
         db.set_last_update(tbl_name, datetime.now())
         db.add_checkpoint_count(tbl_name, total)
     db.log_pull_summary(tbl_name, "npsn", started_at, datetime.now(),
-                        total, len(npsn_list), failed,
+                        total, len(effective_npsn_list), failed,
                         batch_id, request_id)
-    logger.info(f"{tbl_name}: {total} baris diproses")
+    logger.info(f"{tbl_name}: {total} baris diproses ({len(effective_npsn_list)}/{len(npsn_list)} NPSN diproses)")
     return {"tbl_name": tbl_name, "param_type": "npsn", "run_started_at": started_at,
             "rows_received": total, "entities_failed": failed}
 
