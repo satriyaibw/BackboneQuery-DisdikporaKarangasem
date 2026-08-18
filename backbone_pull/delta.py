@@ -1,7 +1,13 @@
 """Delta discovery: persempit daftar NPSN ke yang benar-benar berubah sejak
 last_update, sebelum backbone_pull.flow.pull_by_npsn menjalankan loop
 per-NPSN yang sudah ada. Loop NPSN itu sendiri tidak berubah -- fungsi ini
-cuma mempersempit daftar yang masuk ke loop tersebut."""
+cuma mempersempit daftar yang masuk ke loop tersebut.
+
+Catatan operasional: fungsi ini butuh backend yang sudah men-deploy endpoint
+/data/npsn-changed. Kalau dijalankan terhadap backend yang belum punya endpoint
+itu (404), setiap panggilan akan aman jatuh kembali ke daftar NPSN penuh lewat
+jalur `result is None` -- hasil pull tetap benar, cuma ada satu round trip
+ekstra per tabel. Jadi bukan masalah kebenaran, tapi perlu diketahui."""
 
 from typing import List, Optional
 
@@ -22,7 +28,13 @@ async def resolve_npsn_list(api, session, tbl_name: str, last_update: Optional[s
             f"fallback ke {len(npsn_list)} NPSN penuh")
         return npsn_list
 
-    data = result.get("data", [])
+    data = result.get("data")
+    if not isinstance(data, list):
+        logger.warning(
+            f"{tbl_name}: respons delta discovery tak dikenali (bukan list), "
+            f"fallback ke {len(npsn_list)} NPSN penuh")
+        return npsn_list
+
     if api.is_sp_error(data):
         logger.warning(
             f"{tbl_name}: delta discovery sp_error ({data[0].get('keterangan')}), "
@@ -31,5 +43,13 @@ async def resolve_npsn_list(api, session, tbl_name: str, last_update: Optional[s
 
     changed = {row["npsn"] for row in data if row.get("npsn")}
     narrowed = [n for n in npsn_list if n in changed]
+
+    if data and not narrowed:
+        logger.warning(
+            f"{tbl_name}: delta discovery mengembalikan {len(data)} NPSN tapi tidak ada yang "
+            f"cocok dengan daftar lokal -- kemungkinan mismatch wilayah/format, bukan 'tidak ada perubahan', "
+            f"fallback ke {len(npsn_list)} NPSN penuh")
+        return npsn_list
+
     logger.info(f"{tbl_name}: delta discovery mempersempit {len(npsn_list)} -> {len(narrowed)} NPSN")
     return narrowed

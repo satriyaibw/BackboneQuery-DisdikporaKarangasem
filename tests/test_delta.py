@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from backbone_pull.api import BackboneAPI
 from backbone_pull.delta import resolve_npsn_list
 
 
@@ -13,9 +14,9 @@ class FakeAPI:
         self.calls.append((path, params))
         return self._response
 
-    @staticmethod
-    def is_sp_error(data):
-        return bool(data and data[0].get("keterangan")) and set(data[0].keys()) <= {"total_rows", "keterangan"}
+    # Delegasi langsung ke implementasi asli, bukan salinan tangan -- kalau
+    # BackboneAPI.is_sp_error berubah, test di file ini ikut menangkapnya.
+    is_sp_error = staticmethod(BackboneAPI.is_sp_error)
 
 
 def _run(api, tbl_name="ptk", last_update=None, npsn_list=None):
@@ -61,3 +62,29 @@ def test_preserves_original_order_not_response_order():
     api = FakeAPI({"data": [{"npsn": "3"}, {"npsn": "1"}]})
     res = _run(api, last_update="2026-08-01", npsn_list=["1", "2", "3"])
     assert res == ["1", "3"]
+
+
+def test_ptk_rejection_payload_falls_back_to_full_list():
+    api = FakeAPI({"data": [{"total_rows": 0, "keterangan": "Delta discovery untuk peserta_didik/ptk belum didukung -- perlu verifikasi struktur v_peserta_didik/v_ptk terlebih dahulu"}]})
+    res = _run(api, tbl_name="ptk", last_update="2026-08-01", npsn_list=["1", "2", "3"])
+    assert res == ["1", "2", "3"]
+
+
+def test_single_column_keterangan_rejection_falls_back_to_full_list():
+    api = FakeAPI({"data": [{"keterangan": "Tabel tidak ditemukan dalam metadata"}]})
+    res = _run(api, last_update="2026-08-01", npsn_list=["1", "2", "3"])
+    assert res == ["1", "2", "3"]
+
+
+def test_non_list_data_falls_back_to_full_list():
+    api = FakeAPI({"data": None})
+    res = _run(api, last_update="2026-08-01", npsn_list=["1", "2", "3"])
+    assert res == ["1", "2", "3"]
+
+
+def test_nonempty_response_with_no_local_match_falls_back_to_full_list():
+    # Server reports changes, but none of the returned NPSN are in our local roster --
+    # a scope/format mismatch, not "nothing changed" -- must not silently narrow to [].
+    api = FakeAPI({"data": [{"npsn": "999"}, {"npsn": "888"}]})
+    res = _run(api, last_update="2026-08-01", npsn_list=["1", "2", "3"])
+    assert res == ["1", "2", "3"]
