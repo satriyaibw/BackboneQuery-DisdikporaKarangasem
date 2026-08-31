@@ -144,8 +144,16 @@ async def get_metadata() -> Dict[str, dict]:
     for col in result.get("data", []):
         tbl = col["tbl_name"]
         if tbl not in tables:
+            # param_types_available (opsional, dari backbone.v_metadata):
+            # daftar SEMUA param_type yang valid untuk tabel ini, digabung
+            # koma (mis. "npsn,wilayah" untuk dbo.ats) -- dipakai
+            # backbone_client_pull() untuk tahu tabel npsn mana yang JUGA
+            # perlu ditarik lewat wilayah. Server lama tanpa kolom ini ->
+            # fallback ke param_type tunggal (set berisi satu nilai saja).
+            param_types_raw = col.get("param_types_available") or col.get("param_type", "npsn")
             tables[tbl] = {
                 "param_type": col.get("param_type", "npsn"),
+                "param_types_available": {p.strip() for p in param_types_raw.split(",") if p.strip()},
                 "schema_name": col.get("schema_name", "dbo"),
                 "pk_columns": [], "col_defs": [],
             }
@@ -493,6 +501,18 @@ async def backbone_client_pull():
         logger.warning("NPSN list kosong, lewati tabel param_type='npsn'.")
     for tbl_name, meta in tbl_wilayah.items():
         logger.info(f"Tarik (wilayah) → [{meta['schema_name']}].[{tbl_name}]")
+        run_stats.append(await pull_by_wilayah(tbl_name, kode_wilayah_list, meta,
+                                               batch_id, request_id))
+    # Tabel param_type=npsn yang metadata-nya JUGA mengumumkan 'wilayah' di
+    # param_types_available (lihat get_metadata()) -- generik, tidak hardcode
+    # nama tabel: kasus pertama dbo.ats, sebagian barisnya sama sekali tidak
+    # punya npsn ("Belum Pernah Bersekolah") jadi npsn-loop di atas tidak akan
+    # pernah menjangkaunya, cuma bisa lewat kode_wilayah domisili.
+    for tbl_name, meta in tbl_npsn.items():
+        if "wilayah" not in meta.get("param_types_available", set()):
+            continue
+        logger.info(f"Tarik (wilayah, tambahan) → [{meta['schema_name']}].[{tbl_name}] "
+                   "(param_types_available juga sebut wilayah -- jangkau baris tanpa npsn)")
         run_stats.append(await pull_by_wilayah(tbl_name, kode_wilayah_list, meta,
                                                batch_id, request_id))
     if settings.pull_ref:
