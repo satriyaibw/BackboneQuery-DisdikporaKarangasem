@@ -51,12 +51,20 @@ async def pull_paginated(api, db, session, path, base_params, tbl_name, meta, lo
             expected = result.get("total_rows")
 
         if data:
-            if write_lock is not None:
-                # Tulis diserialisasi (anti-deadlock) + non-blocking terhadap event loop.
-                async with write_lock:
-                    await asyncio.to_thread(db.upsert_rows, tbl_name, data, meta)
-            else:
-                db.upsert_rows(tbl_name, data, meta)
+            try:
+                if write_lock is not None:
+                    # Tulis diserialisasi (anti-deadlock) + non-blocking terhadap event loop.
+                    async with write_lock:
+                        await asyncio.to_thread(db.upsert_rows, tbl_name, data, meta)
+                else:
+                    db.upsert_rows(tbl_name, data, meta)
+            except Exception as e:  # noqa: BLE001
+                # Gagal tulis DB (mis. constraint violation, deadlock) HARUS jadi
+                # PullResult gagal biasa -- bukan exception yang merambat lewat
+                # asyncio.gather() dan menjatuhkan seluruh batch entity lain yang
+                # kebetulan jalan bersamaan (lihat pull_by_npsn/pull_by_wilayah).
+                return PullResult(received, expected, False, "error",
+                                  f"gagal tulis DB di halaman {page}: {e}", rows)
             received += len(data)
             if collect:
                 rows.extend(data)
