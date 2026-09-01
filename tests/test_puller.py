@@ -19,10 +19,13 @@ class FakeAPI:
 
 
 class FakeDB:
-    def __init__(self):
+    def __init__(self, raise_on_upsert=None):
         self.upserted = []
+        self._raise_on_upsert = raise_on_upsert
 
     def upsert_rows(self, tbl_name, data, meta):
+        if self._raise_on_upsert is not None:
+            raise self._raise_on_upsert
         self.upserted.append((tbl_name, list(data)))
         return len(data)
 
@@ -90,6 +93,35 @@ def test_unknown_total_rows_ok_when_no_error():
     api = FakeAPI([{"total_pages": 1, "data": [{"a": 1}]}])  # tanpa total_rows
     res = _run(api, FakeDB())
     assert res.ok is True and res.expected is None and res.received == 1
+
+
+def test_db_write_error_becomes_pull_result_not_exception():
+    # Baris NOT NULL violation dkk -- HARUS jadi PullResult(ok=False), bukan
+    # exception yang merambat lewat asyncio.gather() dan menjatuhkan seluruh
+    # batch tabel itu (lihat backbone-pull-ref-bulk crash: IntegrityError dari
+    # db.upsert_rows tidak tertangani sebelumnya).
+    api = FakeAPI([{"total_rows": 2, "total_pages": 1, "data": [{"a": 1}, {"a": 2}]}])
+    db = FakeDB(raise_on_upsert=RuntimeError("Cannot insert the value NULL into column 'x'"))
+    res = _run(api, db)
+    assert res.ok is False and res.reason == "error"
+    assert "Cannot insert the value NULL" in res.detail
+    assert res.received == 0  # baris yg gagal ditulis tidak dihitung diterima
+
+
+def test_db_write_error_via_write_lock_path_also_safe():
+    api = FakeAPI([{"total_rows": 2, "total_pages": 1, "data": [{"a": 1}, {"a": 2}]}])
+    db = FakeDB(raise_on_upsert=RuntimeError("deadlock"))
+
+    async def run():
+        lock = asyncio.Lock()
+        return await pull_paginated(
+            api, db, session=None, path="/data/by-npsn",
+            base_params={"npsn": "1", "tbl_name": "guru"},
+            tbl_name="guru", meta={}, logger=logging.getLogger("t"),
+            write_lock=lock)
+
+    res = asyncio.run(run())
+    assert res.ok is False and res.reason == "error" and "deadlock" in res.detail
 
 
 def test_write_lock_path_still_upserts():
