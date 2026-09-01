@@ -288,9 +288,17 @@ async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict,
 @task(name="backbone-pull-wilayah", log_prints=True, retries=2, retry_delay_seconds=10)
 async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dict,
                           batch_id: Optional[str] = None,
-                          request_id: Optional[str] = None) -> dict:
+                          request_id: Optional[str] = None,
+                          checkpoint_key: Optional[str] = None) -> dict:
+    """checkpoint_key: dipakai kalau tabel ini punya JALUR PULL LAIN yang menulis
+    sync.pull_checkpoint dengan tbl_name yang sama (mis. dbo.ats: npsn utama +
+    wilayah tambahan, lihat backbone_client_pull()) -- tanpa key terpisah, kedua
+    jalur akan saling menimpa checkpoint satu sama lain, padahal last_update
+    keduanya seharusnya independen (subset baris yang dijangkau tidak overlap).
+    Default None -> pakai tbl_name seperti biasa (tabel wilayah-tunggal)."""
     logger = get_run_logger()
-    last_update = db.get_last_update(tbl_name)
+    ckpt = checkpoint_key or tbl_name
+    last_update = db.get_last_update(ckpt)
     started_at = datetime.now()
     sem = asyncio.Semaphore(CONCURRENCY)
     write_lock = asyncio.Lock()
@@ -316,8 +324,8 @@ async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dic
                                                 res.reason, res.detail, res.expected, res.received)
         await asyncio.gather(*[_one(k) for k in kode_wilayah_list])
     if total:
-        db.set_last_update(tbl_name, datetime.now())
-        db.add_checkpoint_count(tbl_name, total)
+        db.set_last_update(ckpt, datetime.now())
+        db.add_checkpoint_count(ckpt, total)
     db.log_pull_summary(tbl_name, "wilayah", started_at, datetime.now(),
                         total, len(kode_wilayah_list), failed,
                         batch_id, request_id)
@@ -508,13 +516,20 @@ async def backbone_client_pull():
     # nama tabel: kasus pertama dbo.ats, sebagian barisnya sama sekali tidak
     # punya npsn ("Belum Pernah Bersekolah") jadi npsn-loop di atas tidak akan
     # pernah menjangkaunya, cuma bisa lewat kode_wilayah domisili.
+    # checkpoint_key diberi suffix terpisah ("<tbl>__wilayah") -- tanpa ini,
+    # sync.pull_checkpoint (PK-nya cuma tbl_name) akan dibagi dua jalur pull
+    # yang independen: pull_by_npsn di atas barusan menulis last_update="baru
+    # saja", lalu pull_by_wilayah di sini membacanya balik sebagai checkpoint
+    # SENDIRI -- baris tanpa npsn jadi nyaris tidak pernah tertarik lagi
+    # setelah run pertama karena filter last_update-nya keliru.
     for tbl_name, meta in tbl_npsn.items():
         if "wilayah" not in meta.get("param_types_available", set()):
             continue
         logger.info(f"Tarik (wilayah, tambahan) → [{meta['schema_name']}].[{tbl_name}] "
                    "(param_types_available juga sebut wilayah -- jangkau baris tanpa npsn)")
         run_stats.append(await pull_by_wilayah(tbl_name, kode_wilayah_list, meta,
-                                               batch_id, request_id))
+                                               batch_id, request_id,
+                                               checkpoint_key=f"{tbl_name}__wilayah"))
     if settings.pull_ref:
         bulk_stats, bulk_loaded = await pull_ref_bulk(tbl_ref, batch_id, request_id)
         run_stats.extend(bulk_stats)
