@@ -144,12 +144,6 @@ async def get_metadata() -> Dict[str, dict]:
     for col in result.get("data", []):
         tbl = col["tbl_name"]
         if tbl not in tables:
-            # param_types_available (opsional, dari backbone.v_metadata):
-            # daftar SEMUA param_type yang valid untuk tabel ini, digabung
-            # koma (mis. "npsn,wilayah" untuk dbo.ats) -- dipakai
-            # backbone_client_pull() untuk tahu tabel npsn mana yang JUGA
-            # perlu ditarik lewat wilayah. Server lama tanpa kolom ini ->
-            # fallback ke param_type tunggal (set berisi satu nilai saja).
             param_types_raw = col.get("param_types_available") or col.get("param_type", "npsn")
             tables[tbl] = {
                 "param_type": col.get("param_type", "npsn"),
@@ -290,12 +284,7 @@ async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dic
                           batch_id: Optional[str] = None,
                           request_id: Optional[str] = None,
                           checkpoint_key: Optional[str] = None) -> dict:
-    """checkpoint_key: dipakai kalau tabel ini punya JALUR PULL LAIN yang menulis
-    sync.pull_checkpoint dengan tbl_name yang sama (mis. dbo.ats: npsn utama +
-    wilayah tambahan, lihat backbone_client_pull()) -- tanpa key terpisah, kedua
-    jalur akan saling menimpa checkpoint satu sama lain, padahal last_update
-    keduanya seharusnya independen (subset baris yang dijangkau tidak overlap).
-    Default None -> pakai tbl_name seperti biasa (tabel wilayah-tunggal)."""
+    
     logger = get_run_logger()
     ckpt = checkpoint_key or tbl_name
     last_update = db.get_last_update(ckpt)
@@ -366,13 +355,6 @@ async def pull_ref(tbl_name: str, meta: dict,
 async def pull_ref_bulk(tbl_ref: Dict[str, dict],
                         batch_id: Optional[str] = None,
                         request_id: Optional[str] = None) -> Tuple[List[dict], set]:
-    """Coba muat semua tabel referensi sekaligus lewat GET /referensi/download
-    (ZIP: satu CSV per tabel + manifest.json) — jauh lebih hemat request
-    dibanding /referensi per tabel berpaginasi. Best-effort: kegagalan apa pun
-    (server belum mendukung endpoint ini, ZIP rusak, tabel hilang/jumlah baris
-    tak cocok manifest) tidak menggagalkan task ini — tabel yang tidak berhasil
-    dimuat di sini otomatis ditarik lewat jalur lama (pull_ref per tabel) oleh
-    flow utama, jadi tetap 100% berfungsi walau server belum punya endpoint ini."""
     logger = get_run_logger()
     stats: List[dict] = []
     loaded: set = set()
@@ -388,12 +370,6 @@ async def pull_ref_bulk(tbl_ref: Dict[str, dict],
         logger.warning(f"Gagal membaca ZIP referensi: {e} — pakai jalur lama (per-tabel).")
         return stats, loaded
 
-    # Skip import kalau prefill belum berubah sejak run terakhir (bandingkan
-    # manifest['generated_at'] server terhadap checkpoint tersimpan). Catatan:
-    # get_last_update() cuma presisi tanggal (bukan jam) — cukup untuk kasus
-    # normal (referensi jarang di-generate ulang, jauh lebih jarang dari
-    # sekali per hari), tapi kalau server di-generate ulang 2x di HARI YANG
-    # SAMA, perubahan kedua baru ke-pick-up di run setelah tanggal berganti.
     generated_at = get_manifest_generated_at(manifest)
     if generated_at is not None:
         last_checkpoint = db.get_last_update(REF_BULK_CHECKPOINT_KEY)
@@ -440,9 +416,6 @@ async def pull_ref_bulk(tbl_ref: Dict[str, dict],
 
 @task(name="backbone-retry-failed", log_prints=True)
 async def retry_failed(tables: Dict[str, dict]) -> Dict[str, int]:
-    """Coba ulang item yg gagal — full pull (tanpa filter last_update) agar lengkap.
-    Kembalikan tambahan baris  per tabel (dipakai flow utama untuk
-    update pull_log agar status mencerminkan hasil AKHIR setelah retry)."""
     logger = get_run_logger()
     recovered_rows: Dict[str, int] = {}
     failures = db.list_failures()
@@ -511,17 +484,7 @@ async def backbone_client_pull():
         logger.info(f"Tarik (wilayah) → [{meta['schema_name']}].[{tbl_name}]")
         run_stats.append(await pull_by_wilayah(tbl_name, kode_wilayah_list, meta,
                                                batch_id, request_id))
-    # Tabel param_type=npsn yang metadata-nya JUGA mengumumkan 'wilayah' di
-    # param_types_available (lihat get_metadata()) -- generik, tidak hardcode
-    # nama tabel: kasus pertama dbo.ats, sebagian barisnya sama sekali tidak
-    # punya npsn ("Belum Pernah Bersekolah") jadi npsn-loop di atas tidak akan
-    # pernah menjangkaunya, cuma bisa lewat kode_wilayah domisili.
-    # checkpoint_key diberi suffix terpisah ("<tbl>__wilayah") -- tanpa ini,
-    # sync.pull_checkpoint (PK-nya cuma tbl_name) akan dibagi dua jalur pull
-    # yang independen: pull_by_npsn di atas barusan menulis last_update="baru
-    # saja", lalu pull_by_wilayah di sini membacanya balik sebagai checkpoint
-    # SENDIRI -- baris tanpa npsn jadi nyaris tidak pernah tertarik lagi
-    # setelah run pertama karena filter last_update-nya keliru.
+    
     for tbl_name, meta in tbl_npsn.items():
         if "wilayah" not in meta.get("param_types_available", set()):
             continue
@@ -539,9 +502,7 @@ async def backbone_client_pull():
             logger.info(f"Tarik (ref) → [{meta['schema_name']}].[{tbl_name}]")
             run_stats.append(await pull_ref(tbl_name, meta, batch_id, request_id))
 
-    # Retry lalu perbarui pull_log tiap tabel dengan hasil AKHIR (bukan snapshot
-    # sebelum retry) — dibaca ulang dari pull_failures yang tersisa, bukan
-    # dihitung dari selisih, supaya benar walau ada sisa gagal dari run lama.
+    
     recovered_rows = await retry_failed(tables)
     remaining_by_table: Dict[str, int] = {}
     for f in db.list_failures():
@@ -560,12 +521,6 @@ async def backbone_client_pull():
 
 @flow(name="backbone-client-retry-failed", log_prints=True)
 async def retry_failed_only():
-    """Coba ulang HANYA item yang tersisa di sync.pull_failures — tanpa pass
-    utama (semua NPSN/wilayah/tabel) seperti backbone_client_pull. Jauh lebih
-    cepat, dipakai main.py sebagai percobaan tambahan segera setelah --run-once
-    atau satu iterasi --loop masih menyisakan failure, tanpa menunggu jadwal
-    penuh berikutnya (yang bisa berjarak berhari-hari kalau jadwal Backbone
-    jarang, mis. tanggal 14/28)."""
     logger = get_run_logger()
     prepare_infrastructure()
 
@@ -593,10 +548,6 @@ async def retry_failed_only():
         key = (f["tbl_name"], f["param_type"])
         by_key_after[key] = by_key_after.get(key, 0) + 1
 
-    # Koreksi baris pull_log TERBARU tiap tabel (ditulis run sebelumnya) di
-    # tempat -- bukan menyisipkan baris baru -- supaya status di pull_log
-    # ikut berubah dari 'incomplete' ke 'ok' begitu pull_failures bersih,
-    # konsisten dengan yang terlihat user tanpa perlu baris terpisah.
     for (tbl_name, param_type), total_before in by_key_before.items():
         rows = recovered_rows.get(tbl_name, 0)
         still_failed = by_key_after.get((tbl_name, param_type), 0)
