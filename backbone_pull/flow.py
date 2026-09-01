@@ -397,14 +397,7 @@ async def pull_ref_bulk(tbl_ref: Dict[str, dict],
             for i in range(0, len(rows), PER_PAGE):
                 chunk = rows[i:i + PER_PAGE]
                 total += await asyncio.to_thread(db.upsert_rows, tbl_name, chunk, meta)
-        except Exception as e:  # noqa: BLE001
-            # Mis. NOT NULL violation -- CSV tidak bisa bedakan None vs ''
-            # (Python csv.writer menulis keduanya sebagai field kosong), jadi
-            # kolom yang boleh string kosong (bukan NULL) bisa salah ke-parse
-            # jadi None di parse_referensi_zip(). Daripada menebak nullable
-            # per kolom di situ, lewati tabel ini di sini -- jatuh ke jalur
-            # lama (pull_ref via JSON per-tabel) yang tidak ambigu soal
-            # None vs '' sama sekali.
+        except Exception as e:  
             logger.warning(f"{tbl_name}: gagal upsert dari ZIP referensi ({e}) — lewati, pakai jalur lama.")
             continue
         finished_at = datetime.now()
