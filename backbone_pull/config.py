@@ -66,6 +66,7 @@ class Settings:
     schedule_retry_interval_hours: int
     deployment_name: str
     pull_ref: bool
+    pull_ref_use_bulk_zip: bool
     pull_log_retention_days: int
 
 
@@ -117,6 +118,7 @@ def load_settings() -> Settings:
         schedule_retry_count=_int("SCHEDULE_RETRY_COUNT", 3),
         schedule_retry_interval_hours=_int("SCHEDULE_RETRY_INTERVAL_HOURS", 4),
         deployment_name=os.getenv("DEPLOYMENT_NAME") or "backbone-client-pull",
-        pull_ref=_bool("PULL_REF", False),
+        pull_ref=_bool("PULL_REF", True),
+        pull_ref_use_bulk_zip=_bool("PULL_REF_USE_BULK_ZIP", False),
         pull_log_retention_days=_int("PULL_LOG_RETENTION_DAYS", 60),
     )

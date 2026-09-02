@@ -498,8 +498,10 @@ async def backbone_client_pull():
                                                batch_id, request_id,
                                                checkpoint_key=f"{tbl_name}__wilayah"))
     if settings.pull_ref:
-        bulk_stats, bulk_loaded = await pull_ref_bulk(tbl_ref, batch_id, request_id)
-        run_stats.extend(bulk_stats)
+        bulk_loaded: set = set()
+        if settings.pull_ref_use_bulk_zip:
+            bulk_stats, bulk_loaded = await pull_ref_bulk(tbl_ref, batch_id, request_id)
+            run_stats.extend(bulk_stats)
         for tbl_name, meta in tbl_ref.items():
             if tbl_name in bulk_loaded:
                 continue
