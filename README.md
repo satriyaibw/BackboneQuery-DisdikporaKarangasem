@@ -21,7 +21,7 @@ Proyek ini menarik data dari **Backbone API** dan menyimpannya ke database **SQL
 
 - Mengambil **access-token** otomatis (tukar username/password → JWT), lalu membuat *request* akses ke Backbone API, lalu mengambil metadata tabel yang tersedia (`/metadata`).
 - Menarik daftar wilayah akses (kecamatan) client, lalu menarik data tabel `sekolah` per wilayah untuk mendapatkan daftar NPSN.
-- Berdasarkan metadata, tabel-tabel lain ditarik per NPSN (`param_type=npsn`) atau per wilayah (`param_type=wilayah`); tabel referensi (`param_type=ref`) bersifat opsional (diatur oleh `PULL_REF`) dan diambil lewat **download ZIP sekali jalan** (lebih hemat request), dengan fallback otomatis ke jalur lama per-tabel bila perlu — lihat §8.
+- Berdasarkan metadata, tabel-tabel lain ditarik per NPSN (`param_type=npsn`) atau per wilayah (`param_type=wilayah`); tabel referensi (`param_type=ref`) diambil setiap siklus secara default (diatur oleh `PULL_REF`, default `true`), **per tabel lewat API, incremental berdasarkan `last_update`** — dengan opsi mencoba dulu download ZIP sekali jalan (`PULL_REF_USE_BULK_ZIP=true`, lebih hemat request tapi non-default) yang otomatis fallback ke jalur per-tabel bila perlu — lihat §8.
 - Setiap tabel disimpan dengan skema **incremental**: setiap tabel punya *checkpoint* `last_update` (disimpan di skema `sync`, tabel `pull_checkpoint`) sehingga proses berikutnya hanya menarik data yang berubah sejak penarikan terakhir.
 - Struktur tabel (skema, kolom, tipe data, primary key) dibuat/disesuaikan otomatis mengikuti metadata dari Backbone API (auto DDL), termasuk pembuatan database jika belum ada (bisa dimatikan, lihat §8).
 - Penarikan dilakukan **paralel** (banyak NPSN/kecamatan sekaligus) dengan *rate limiter* yang menjaga laju request tidak melebihi batas API (default 20/detik) — jauh lebih cepat dari sekuensial, tetap aman. Diatur lewat `BACKBONE_CONCURRENCY` & `BACKBONE_RATE_LIMIT`.
@@ -112,12 +112,13 @@ Salin `.env.example` menjadi `.env` lalu isi sesuai lingkungan client. Variabel 
 | `SCHEDULE_RETRY_COUNT`     | Opsional| `3`                                                                    | **Khusus mode `--loop`** dgn `SCHEDULE_AUTO_FROM_API=true`. Jumlah percobaan berjeda per hari jadwal (jaga-jaga bila percobaan pertama gagal, mis. gangguan jaringan sesaat). Otomatis dipangkas bila jamnya akan melewati tengah malam. |
 | `SCHEDULE_RETRY_INTERVAL_HOURS` | Opsional| `4`                                                               | **Khusus mode `--loop`** dgn `SCHEDULE_AUTO_FROM_API=true`. Jeda jam antar percobaan dalam `SCHEDULE_RETRY_COUNT`. |
 | `DEPLOYMENT_NAME`          | Opsional| `backbone-client-pull`                                                 | Nama deployment yang didaftarkan ke Prefect `serve`.                                                             |
-| `PULL_REF`                 | Opsional| `false`                                                                | Jika `true`, tabel referensi (`param_type=ref`) ikut ditarik setiap siklus.                                      |
+| `PULL_REF`                 | Opsional| `true`                                                                 | Jika `true`, tabel referensi (`param_type=ref`) ikut ditarik setiap siklus.                                      |
+| `PULL_REF_USE_BULK_ZIP`    | Opsional| `false`                                                                | Jika `true`, coba dulu download ZIP sekali jalan untuk tabel referensi sebelum fallback ke jalur per-tabel via API. Lihat §8. |
 | `PULL_LOG_RETENTION_DAYS`  | Opsional| `60`                                                                   | Berapa hari riwayat aktivitas (`sync.pull_log`) disimpan sebelum dihapus otomatis. Lihat §8.                     |
 
 \* `DB_PORT` punya default per dialect di kode (`1433` untuk `sqlserver`, `5432` untuk `postgres`, `3306` untuk `mysql`) jika variabel dikosongkan sepenuhnya — namun karena `.env.example` sudah mengisi `1433`, **wajib diubah manual menjadi `5432`/`3306` saat memakai PostgreSQL/MySQL**.
 
-Nilai boolean (`DB_AUTO_CREATE_DATABASE`, `PULL_REF`) menerima `true/false`, `1/0`, `yes/no`, `y/n`, atau `on/off` (tidak case-sensitive).
+Nilai boolean (`DB_AUTO_CREATE_DATABASE`, `PULL_REF`, `PULL_REF_USE_BULK_ZIP`) menerima `true/false`, `1/0`, `yes/no`, `y/n`, atau `on/off` (tidak case-sensitive).
 
 ## 5. Menjalankan sebagai Service
 
@@ -367,13 +368,13 @@ Arti kolom `reason`:
   - `uv run python main.py --run-once` — jalankan siklus penuh (semua NPSN/wilayah/tabel, incremental) lalu retry-only otomatis kalau masih ada sisa. Durasinya mirip run terjadwal biasa.
   - `uv run python main.py --retry-failed` — **hanya** retry item yang ada di `sync.pull_failures` saat itu (tanpa pass utama) — jauh lebih cepat, cocok kalau Anda tahu sisa gagalnya sedikit dan ingin membereskannya segera tanpa menunggu/menjalankan siklus penuh. Hasilnya **mengoreksi baris `sync.pull_log` terbaru** untuk tabel itu di tempat (bukan menyisipkan baris baru) — jadi begitu `sync.pull_failures` bersih, `status` di baris yang sama juga otomatis berubah dari `incomplete` menjadi `ok`, tidak perlu bandingkan dua baris berbeda.
 
-### Tabel referensi (`PULL_REF=true`): download ZIP vs jalur lama per-tabel
-Saat `PULL_REF=true`, tabel referensi (`param_type=ref`) diambil lewat dua jalur, otomatis, **tanpa perlu konfigurasi tambahan**:
+### Tabel referensi (`PULL_REF=true`): jalur API per-tabel vs download ZIP
+Saat `PULL_REF=true` (default), tabel referensi (`param_type=ref`) ditarik lewat salah satu dari dua jalur, diatur oleh `PULL_REF_USE_BULK_ZIP`:
 
-1. **Jalur utama — download ZIP sekali jalan** (`GET /referensi/download`): satu request mengambil snapshot *seluruh* tabel referensi sekaligus (dikemas server sebagai ZIP berisi satu CSV per tabel + `manifest.json`), jauh lebih hemat request dibanding menarik tiap tabel referensi satu per satu secara berpaginasi.
-2. **Jalur lama — per tabel berpaginasi** (`GET /referensi?ref=<nama>`): dipakai otomatis sebagai *fallback* untuk tabel yang **tidak** berhasil dimuat dari ZIP — baik karena server belum menyediakan endpoint download (fallback penuh, seperti sebelum fitur ini ada), ZIP belum pernah di-*generate* di sisi server, maupun satu tabel tertentu hilang/jumlah barisnya tidak cocok dengan `manifest.json` (fallback per tabel).
+1. **Jalur default (`PULL_REF_USE_BULK_ZIP=false`) — per tabel lewat API** (`GET /referensi?ref=<nama>`): sama seperti tabel npsn/wilayah lainnya — berpaginasi dan **incremental** berdasarkan `last_update` per tabel (`sync.pull_checkpoint`), jadi setelah pull pertama, siklus berikutnya hanya menarik baris yang berubah. Ini jalur paling sederhana dan tidak punya risiko ambiguitas nilai `NULL` vs string kosong (`''`) — data ditulis langsung dari JSON, bukan lewat perantara CSV.
+2. **Jalur opsional (`PULL_REF_USE_BULK_ZIP=true`) — download ZIP sekali jalan** (`GET /referensi/download`): satu request mengambil snapshot *seluruh* tabel referensi sekaligus (dikemas server sebagai ZIP berisi satu CSV per tabel + `manifest.json`), lebih hemat request dibanding jalur per-tabel di atas — tapi **bukan incremental** (selalu snapshot penuh) dan datanya lewat perantara CSV, yang tidak bisa membedakan `NULL` dari string kosong (`''`) pada kolom sumber; kalau kolom `NOT NULL` yang nilainya `''` kena konversi jadi `NULL` saat parse, baris/tabel itu otomatis **fallback** ke jalur per-tabel di atas (lihat `pull_ref_bulk` di `flow.py`) — tidak sampai menjatuhkan seluruh run.
 
-Karena fallback ini otomatis, proses tetap berjalan normal walau server Backbone yang diakses belum mendukung `GET /referensi/download` — tidak ada perubahan perilaku yang terlihat client selain lebih cepat begitu server mendukungnya. Tidak ada variabel `.env` baru yang perlu diisi untuk ini.
+Fallback ke jalur per-tabel juga otomatis terjadi (walau `PULL_REF_USE_BULK_ZIP=true`) bila server Backbone yang diakses belum mendukung `GET /referensi/download`, ZIP belum pernah di-*generate* di sisi server, atau satu tabel tertentu hilang/jumlah barisnya tidak cocok dengan `manifest.json`.
 
 ### Riwayat aktivitas penarikan (`sync.pull_log`)
 Setiap kali sebuah tabel selesai ditarik (per run), satu baris ringkasan dicatat ke tabel **`sync.pull_log`** — sehingga aktivitas penarikan bisa dicek kapan saja tanpa perlu membuka log Prefect/terminal:

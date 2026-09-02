@@ -11,7 +11,7 @@ def _set(monkeypatch, env):
     for k in ("DB_DIALECT","DB_HOST","DB_PORT","DB_USER","DB_PASSWORD","DB_NAME",
               "BACKBONE_API_KEY","BACKBONE_USERNAME","BACKBONE_PASSWORD","BACKBONE_AUTH_URL",
               "DB_AUTO_CREATE_DATABASE","BACKBONE_PER_PAGE","BACKBONE_RATE_LIMIT",
-              "BACKBONE_CONCURRENCY","PULL_REF","PULL_LOG_RETENTION_DAYS",
+              "BACKBONE_CONCURRENCY","PULL_REF","PULL_REF_USE_BULK_ZIP","PULL_LOG_RETENTION_DAYS",
               "SCHEDULE_AUTO_FROM_API","SCHEDULE_RETRY_COUNT","SCHEDULE_RETRY_INTERVAL_HOURS"):
         monkeypatch.delenv(k, raising=False)
     for k, v in env.items():
@@ -26,6 +26,12 @@ def test_loads_and_types(monkeypatch):
     assert s.backbone_per_page == 250
     assert s.db_auto_create_database is True
     assert s.pull_ref is False
+    assert s.pull_ref_use_bulk_zip is False  # default
+
+def test_pull_ref_defaults_to_true(monkeypatch):
+    _set(monkeypatch, BASE_ENV)  # PULL_REF tidak diisi
+    s = load_settings()
+    assert s.pull_ref is True
     assert s.backbone_username == "user"
     assert s.backbone_password == "pass"
     assert s.backbone_rate_limit == 20.0  # default
@@ -70,3 +76,8 @@ def test_mysql_dialect_default_port(monkeypatch):
     s = load_settings()
     assert s.db_dialect == "mysql"
     assert s.db_port == 3306
+
+def test_pull_ref_use_bulk_zip_can_be_enabled(monkeypatch):
+    _set(monkeypatch, {**BASE_ENV, "PULL_REF_USE_BULK_ZIP": "true"})
+    s = load_settings()
+    assert s.pull_ref_use_bulk_zip is True
