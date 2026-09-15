@@ -81,6 +81,9 @@ class DatabaseAdapter(ABC):
     def add_checkpoint_count(self, tbl_name: str, count: int): ...
 
     @abstractmethod
+    def build_fetch_existing_npsn_sql(self, schema_name: str, tbl_name: str) -> str: ...
+
+    @abstractmethod
     def fetch_existing_npsn(self, schema_name: str, tbl_name: str) -> List[str]: ...
 
     # ── dead-letter: item penarikan yang gagal / tidak lengkap ─────────────

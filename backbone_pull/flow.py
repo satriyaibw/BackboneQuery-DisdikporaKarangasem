@@ -219,7 +219,10 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict,
                         logger.warning(f"Sekolah wilayah {kode}: {res.reason} — {res.detail}")
                         await asyncio.to_thread(db.record_failure, "sekolah", "wilayah", kode,
                                                 res.reason, res.detail, res.expected, res.received)
-                collected.extend(r["npsn"] for r in res.rows if r.get("npsn"))
+                collected.extend(
+                    r["npsn"] for r in res.rows
+                    if r.get("npsn") and not r.get("soft_delete")
+                )
         await asyncio.gather(*[_one(k) for k in kode_wilayah_list])
 
     npsn_list = list(dict.fromkeys(npsn_list + collected))

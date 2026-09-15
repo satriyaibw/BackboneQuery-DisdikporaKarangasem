@@ -72,6 +72,13 @@ def test_upsert_sql_no_non_pk_cols_is_safe_noop():
     sql = a.build_upsert_sql("sekolah", cols, ["npsn"], "dbo", col_to_param)
     assert "ON DUPLICATE KEY UPDATE `npsn`=`npsn`" in sql
 
+def test_fetch_existing_npsn_sql_filters_soft_delete():
+    a = _adapter()
+    sql = a.build_fetch_existing_npsn_sql("dbo", "sekolah")
+    assert "FROM `dbo_sekolah`" in sql
+    assert "npsn IS NOT NULL" in sql
+    assert "soft_delete = 0" in sql
+
 def test_insert_sql():
     a = _adapter()
     cols = ["npsn", "nama"]
