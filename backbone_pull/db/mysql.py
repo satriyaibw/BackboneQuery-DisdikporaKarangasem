@@ -191,10 +191,16 @@ class MySQLAdapter(DatabaseAdapter):
                 "SET total_rows = total_rows + :c, pulled_at = NOW() WHERE tbl_name = :t"
             ), {"c": count, "t": tbl_name})
 
+    def build_fetch_existing_npsn_sql(self, schema_name: str, tbl_name: str) -> str:
+        return (
+            f"SELECT npsn FROM {self._tname(schema_name, tbl_name)} "
+            "WHERE npsn IS NOT NULL AND soft_delete = 0"
+        )
+
     def fetch_existing_npsn(self, schema_name: str, tbl_name: str) -> List[str]:
         with self._engine.connect() as conn:
             rows = conn.execute(text(
-                f"SELECT npsn FROM {self._tname(schema_name, tbl_name)} WHERE npsn IS NOT NULL"
+                self.build_fetch_existing_npsn_sql(schema_name, tbl_name)
             )).fetchall()
         return [r[0] for r in rows if r[0]]
 

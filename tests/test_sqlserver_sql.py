@@ -51,6 +51,13 @@ def test_upsert_sql_has_no_null_unsafe_change_guard():
     sql = a.build_upsert_sql("sekolah", cols, ["npsn"], "dbo", col_to_param)
     assert "WHEN MATCHED AND" not in sql
 
+def test_fetch_existing_npsn_sql_filters_soft_delete():
+    a = _adapter()
+    sql = a.build_fetch_existing_npsn_sql("dbo", "sekolah")
+    assert "FROM [dbo].[sekolah]" in sql
+    assert "npsn IS NOT NULL" in sql
+    assert "soft_delete = 0" in sql
+
 def test_create_table_sql_has_guard_and_pk():
     a = _adapter()
     col_defs = [{"name": "npsn", "type_name": "nvarchar", "type_length": 20, "nullable": False},
