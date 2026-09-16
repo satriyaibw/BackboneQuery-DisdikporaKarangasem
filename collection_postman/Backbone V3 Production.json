@@ -1,0 +1,2460 @@
+{
+  "info": {
+    "name": "Backbone V3",
+    "description": null,
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Data",
+      "item": [
+        {
+          "name": "Mengambil data tabel berdasarkan NPSN sekolah",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/data/by-npsn",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "data",
+                "by-npsn"
+              ],
+              "query": [
+                {
+                  "key": "npsn",
+                  "value": "",
+                  "description": "NPSN sekolah (8 karakter)."
+                },
+                {
+                  "key": "tbl_name",
+                  "value": "",
+                  "description": "Nama tabel yang dituju."
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "500"
+                },
+                {
+                  "key": "last_update",
+                  "value": "",
+                  "description": "Filter data sejak tanggal ini (YYYY-MM-DD)."
+                }
+              ],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "200 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/data/by-npsn",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "data",
+                    "by-npsn"
+                  ],
+                  "query": [
+                    {
+                      "key": "npsn",
+                      "value": "",
+                      "description": "NPSN sekolah (8 karakter)."
+                    },
+                    {
+                      "key": "tbl_name",
+                      "value": "",
+                      "description": "Nama tabel yang dituju."
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "500"
+                    },
+                    {
+                      "key": "last_update",
+                      "value": "",
+                      "description": "Filter data sejak tanggal ini (YYYY-MM-DD)."
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/data/by-npsn",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "data",
+                    "by-npsn"
+                  ],
+                  "query": [
+                    {
+                      "key": "npsn",
+                      "value": "",
+                      "description": "NPSN sekolah (8 karakter)."
+                    },
+                    {
+                      "key": "tbl_name",
+                      "value": "",
+                      "description": "Nama tabel yang dituju."
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "500"
+                    },
+                    {
+                      "key": "last_update",
+                      "value": "",
+                      "description": "Filter data sejak tanggal ini (YYYY-MM-DD)."
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Mengambil data tabel berdasarkan kode wilayah",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/data/by-wilayah",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "data",
+                "by-wilayah"
+              ],
+              "query": [
+                {
+                  "key": "tbl_name",
+                  "value": "",
+                  "description": "Nama tabel yang dituju."
+                },
+                {
+                  "key": "kode_wilayah",
+                  "value": "",
+                  "description": "Kode wilayah (6 karakter)."
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "500"
+                },
+                {
+                  "key": "last_update",
+                  "value": "",
+                  "description": "Filter data sejak tanggal ini (YYYY-MM-DD)."
+                }
+              ],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "200 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/data/by-wilayah",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "data",
+                    "by-wilayah"
+                  ],
+                  "query": [
+                    {
+                      "key": "tbl_name",
+                      "value": "",
+                      "description": "Nama tabel yang dituju."
+                    },
+                    {
+                      "key": "kode_wilayah",
+                      "value": "",
+                      "description": "Kode wilayah (6 karakter)."
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "500"
+                    },
+                    {
+                      "key": "last_update",
+                      "value": "",
+                      "description": "Filter data sejak tanggal ini (YYYY-MM-DD)."
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/data/by-wilayah",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "data",
+                    "by-wilayah"
+                  ],
+                  "query": [
+                    {
+                      "key": "tbl_name",
+                      "value": "",
+                      "description": "Nama tabel yang dituju."
+                    },
+                    {
+                      "key": "kode_wilayah",
+                      "value": "",
+                      "description": "Kode wilayah (6 karakter)."
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "500"
+                    },
+                    {
+                      "key": "last_update",
+                      "value": "",
+                      "description": "Filter data sejak tanggal ini (YYYY-MM-DD)."
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Mencari data individu berdasarkan nomor induk",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/data/cari",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "data",
+                "cari"
+              ],
+              "query": [
+                {
+                  "key": "tbl_name",
+                  "value": "",
+                  "description": "Nama tabel: sekolah, yayasan, peserta_didik, ptk."
+                },
+                {
+                  "key": "kolom_induk",
+                  "value": "",
+                  "description": "Kolom pencarian: npsn, npbp, nisn, nik, nuptk, nip."
+                },
+                {
+                  "key": "nomor_induk",
+                  "value": "",
+                  "description": "Nilai nomor induk yang dicari."
+                },
+                {
+                  "key": "kolom_verifikasi",
+                  "value": "",
+                  "description": "Kolom verifikasi kombinasi (wajib untuk peserta_didik/ptk). Contoh: tanggal_lahir."
+                },
+                {
+                  "key": "nilai_verifikasi",
+                  "value": "",
+                  "description": "Nilai verifikasi. Contoh: 2000-01-15 (format YYYY-MM-DD)."
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "500"
+                }
+              ],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "200 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/data/cari",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "data",
+                    "cari"
+                  ],
+                  "query": [
+                    {
+                      "key": "tbl_name",
+                      "value": "",
+                      "description": "Nama tabel: sekolah, yayasan, peserta_didik, ptk."
+                    },
+                    {
+                      "key": "kolom_induk",
+                      "value": "",
+                      "description": "Kolom pencarian: npsn, npbp, nisn, nik, nuptk, nip."
+                    },
+                    {
+                      "key": "nomor_induk",
+                      "value": "",
+                      "description": "Nilai nomor induk yang dicari."
+                    },
+                    {
+                      "key": "kolom_verifikasi",
+                      "value": "",
+                      "description": "Kolom verifikasi kombinasi (wajib untuk peserta_didik/ptk). Contoh: tanggal_lahir."
+                    },
+                    {
+                      "key": "nilai_verifikasi",
+                      "value": "",
+                      "description": "Nilai verifikasi. Contoh: 2000-01-15 (format YYYY-MM-DD)."
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "500"
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/data/cari",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "data",
+                    "cari"
+                  ],
+                  "query": [
+                    {
+                      "key": "tbl_name",
+                      "value": "",
+                      "description": "Nama tabel: sekolah, yayasan, peserta_didik, ptk."
+                    },
+                    {
+                      "key": "kolom_induk",
+                      "value": "",
+                      "description": "Kolom pencarian: npsn, npbp, nisn, nik, nuptk, nip."
+                    },
+                    {
+                      "key": "nomor_induk",
+                      "value": "",
+                      "description": "Nilai nomor induk yang dicari."
+                    },
+                    {
+                      "key": "kolom_verifikasi",
+                      "value": "",
+                      "description": "Kolom verifikasi kombinasi (wajib untuk peserta_didik/ptk). Contoh: tanggal_lahir."
+                    },
+                    {
+                      "key": "nilai_verifikasi",
+                      "value": "",
+                      "description": "Nilai verifikasi. Contoh: 2000-01-15 (format YYYY-MM-DD)."
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "500"
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Mengambil data NPSN yang berubah",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/data/npsn-changed?tbl_name=ptk&last_update=2026-08-10",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "data",
+                "npsn-changed?tbl_name=ptk&last_update=2026-08-10"
+              ],
+              "query": [
+                {
+                  "key": "tbl_name",
+                  "value": "ptk"
+                },
+                {
+                  "key": "last_update",
+                  "value": "2026-08-10"
+                },
+                {
+                  "key": "kolom_verifikasi",
+                  "value": "",
+                  "description": "Kolom verifikasi kombinasi (wajib untuk peserta_didik/ptk). Contoh: tanggal_lahir."
+                },
+                {
+                  "key": "nilai_verifikasi",
+                  "value": "",
+                  "description": "Nilai verifikasi. Contoh: 2000-01-15 (format YYYY-MM-DD)."
+                }
+              ],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "200 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/data/cari",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "data",
+                    "cari"
+                  ],
+                  "query": [
+                    {
+                      "key": "tbl_name",
+                      "value": "",
+                      "description": "Nama tabel: sekolah, yayasan, peserta_didik, ptk."
+                    },
+                    {
+                      "key": "kolom_induk",
+                      "value": "",
+                      "description": "Kolom pencarian: npsn, npbp, nisn, nik, nuptk, nip."
+                    },
+                    {
+                      "key": "nomor_induk",
+                      "value": "",
+                      "description": "Nilai nomor induk yang dicari."
+                    },
+                    {
+                      "key": "kolom_verifikasi",
+                      "value": "",
+                      "description": "Kolom verifikasi kombinasi (wajib untuk peserta_didik/ptk). Contoh: tanggal_lahir."
+                    },
+                    {
+                      "key": "nilai_verifikasi",
+                      "value": "",
+                      "description": "Nilai verifikasi. Contoh: 2000-01-15 (format YYYY-MM-DD)."
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "500"
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/data/cari",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "data",
+                    "cari"
+                  ],
+                  "query": [
+                    {
+                      "key": "tbl_name",
+                      "value": "",
+                      "description": "Nama tabel: sekolah, yayasan, peserta_didik, ptk."
+                    },
+                    {
+                      "key": "kolom_induk",
+                      "value": "",
+                      "description": "Kolom pencarian: npsn, npbp, nisn, nik, nuptk, nip."
+                    },
+                    {
+                      "key": "nomor_induk",
+                      "value": "",
+                      "description": "Nilai nomor induk yang dicari."
+                    },
+                    {
+                      "key": "kolom_verifikasi",
+                      "value": "",
+                      "description": "Kolom verifikasi kombinasi (wajib untuk peserta_didik/ptk). Contoh: tanggal_lahir."
+                    },
+                    {
+                      "key": "nilai_verifikasi",
+                      "value": "",
+                      "description": "Nilai verifikasi. Contoh: 2000-01-15 (format YYYY-MM-DD)."
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "500"
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Metadata",
+      "item": [
+        {
+          "name": "Membaca daftar metadata kolom yang dapat diakses oleh pengguna",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/metadata",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "metadata"
+              ],
+              "query": [
+                {
+                  "key": "last_update",
+                  "value": "",
+                  "description": "Filter metadata yang diperbarui sejak tanggal ini (YYYY-MM-DD)."
+                }
+              ],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "200 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/metadata",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "metadata"
+                  ],
+                  "query": [
+                    {
+                      "key": "last_update",
+                      "value": "",
+                      "description": "Filter metadata yang diperbarui sejak tanggal ini (YYYY-MM-DD)."
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/metadata",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "metadata"
+                  ],
+                  "query": [
+                    {
+                      "key": "last_update",
+                      "value": "",
+                      "description": "Filter metadata yang diperbarui sejak tanggal ini (YYYY-MM-DD)."
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Mengambil waktu last_update terbaru dari metadata pengguna",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/metadata/last-update",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "metadata",
+                "last-update"
+              ],
+              "query": [],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "200 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/metadata/last-update",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "metadata",
+                    "last-update"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/metadata/last-update",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "metadata",
+                    "last-update"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Referensi",
+      "item": [
+        {
+          "name": "Mengambil daftar tabel referensi yang tersedia",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/referensi/daftar",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "referensi",
+                "daftar"
+              ],
+              "query": [],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "200 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/referensi/daftar",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "referensi",
+                    "daftar"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/referensi/daftar",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "referensi",
+                    "daftar"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Mengambil data dari tabel referensi tertentu",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/referensi",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "referensi"
+              ],
+              "query": [
+                {
+                  "key": "ref",
+                  "value": "",
+                  "description": "Nama tabel referensi (mis. jenis_kelamin, agama)."
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "50"
+                }
+              ],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "200 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/referensi",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "referensi"
+                  ],
+                  "query": [
+                    {
+                      "key": "ref",
+                      "value": "",
+                      "description": "Nama tabel referensi (mis. jenis_kelamin, agama)."
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "50"
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/referensi",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "referensi"
+                  ],
+                  "query": [
+                    {
+                      "key": "ref",
+                      "value": "",
+                      "description": "Nama tabel referensi (mis. jenis_kelamin, agama)."
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "50"
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "User Info",
+      "item": [
+        {
+          "name": "Membuat request akses sesi baru",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/user-info/request",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user-info",
+                "request"
+              ],
+              "query": [],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "201 Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/user-info/request",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "user-info",
+                    "request"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/user-info/request",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "user-info",
+                    "request"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Membaca request akses sesi terbaru milik pengguna",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/user-info/request",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user-info",
+                "request"
+              ],
+              "query": [],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "200 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/user-info/request",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "user-info",
+                    "request"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/user-info/request",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "user-info",
+                    "request"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Mengambil daftar kecamatan yang dapat diakses oleh pengguna",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/wilayah-akses-kecamatan",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "wilayah-akses-kecamatan"
+              ],
+              "query": [],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "200 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/wilayah-akses-kecamatan",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "wilayah-akses-kecamatan"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/wilayah-akses-kecamatan",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "wilayah-akses-kecamatan"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Membaca daftar jadwal akses milik pengguna",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/user-info/schedule",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user-info",
+                "schedule"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (dimulai dari 1)."
+                },
+                {
+                  "key": "per_page",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (maksimum 100)."
+                }
+              ],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "200 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/user-info/schedule",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "user-info",
+                    "schedule"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Nomor halaman (dimulai dari 1)."
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "10",
+                      "description": "Jumlah item per halaman (maksimum 100)."
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/user-info/schedule",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "user-info",
+                    "schedule"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Nomor halaman (dimulai dari 1)."
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "10",
+                      "description": "Jumlah item per halaman (maksimum 100)."
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Membaca daftar IP whitelist milik pengguna",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "{{baseUrl}}/user-info/whitelist",
+              "protocol": "",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user-info",
+                "whitelist"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (dimulai dari 1)."
+                },
+                {
+                  "key": "per_page",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (maksimum 100)."
+                }
+              ],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "name": "200 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/user-info/whitelist",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "user-info",
+                    "whitelist"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Nomor halaman (dimulai dari 1)."
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "10",
+                      "description": "Jumlah item per halaman (maksimum 100)."
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "422 Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "",
+                    "description": "",
+                    "disabled": true,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/user-info/whitelist",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "user-info",
+                    "whitelist"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Nomor halaman (dimulai dari 1)."
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "10",
+                      "description": "Jumlah item per halaman (maksimum 100)."
+                    }
+                  ],
+                  "variable": []
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [],\n      \"msg\": \"\",\n      \"type\": \"\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Membaca Credentials repository",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "",
+            "url": {
+              "raw": "",
+              "protocol": "",
+              "host": [],
+              "path": [],
+              "query": [],
+              "variable": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "login",
+      "item": [
+        {
+          "name": "Login Access Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "description": "",
+                "disabled": false,
+                "type": "default"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{api-key}}",
+                "description": "",
+                "disabled": true,
+                "type": "default"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "OAuth2 compatible token login, get an access token for future requests",
+            "url": {
+              "raw": "{{base_url_login}}/access-token",
+              "protocol": "",
+              "host": [
+                "{{base_url_login}}"
+              ],
+              "path": [
+                "access-token"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{username}}",
+                  "disabled": false,
+                  "type": "default",
+                  "description": "(Required) "
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "disabled": false,
+                  "type": "default",
+                  "description": "(Required) "
+                },
+                {
+                  "key": "grant_type",
+                  "value": "<string>",
+                  "disabled": true,
+                  "type": "default",
+                  "description": ""
+                },
+                {
+                  "key": "scope",
+                  "value": "",
+                  "disabled": true,
+                  "type": "default",
+                  "description": ""
+                },
+                {
+                  "key": "client_id",
+                  "value": "<string>",
+                  "disabled": true,
+                  "type": "default",
+                  "description": ""
+                },
+                {
+                  "key": "client_secret",
+                  "value": "<string>",
+                  "disabled": true,
+                  "type": "default",
+                  "description": ""
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.variables.set(\"token\",pm.response.json().access_token);"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "Successful Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "description": "",
+                    "disabled": false,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/login/access-token",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "login",
+                    "access-token"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "body": {
+                  "mode": "urlencoded",
+                  "urlencoded": [
+                    {
+                      "key": "username",
+                      "value": "<string>",
+                      "disabled": false,
+                      "type": "default",
+                      "description": "(Required) "
+                    },
+                    {
+                      "key": "password",
+                      "value": "<string>",
+                      "disabled": false,
+                      "type": "default",
+                      "description": "(Required) "
+                    },
+                    {
+                      "key": "grant_type",
+                      "value": "<string>",
+                      "disabled": false,
+                      "type": "default",
+                      "description": ""
+                    },
+                    {
+                      "key": "scope",
+                      "value": "",
+                      "disabled": false,
+                      "type": "default",
+                      "description": ""
+                    },
+                    {
+                      "key": "client_id",
+                      "value": "<string>",
+                      "disabled": false,
+                      "type": "default",
+                      "description": ""
+                    },
+                    {
+                      "key": "client_secret",
+                      "value": "<string>",
+                      "disabled": false,
+                      "type": "default",
+                      "description": ""
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"access_token\": \"<string>\",\n  \"token_type\": \"bearer\"\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "Validation Error",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "description": "",
+                    "disabled": false,
+                    "type": "default"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/login/access-token",
+                  "protocol": "",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "login",
+                    "access-token"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "body": {
+                  "mode": "urlencoded",
+                  "urlencoded": [
+                    {
+                      "key": "username",
+                      "value": "<string>",
+                      "disabled": false,
+                      "type": "default",
+                      "description": "(Required) "
+                    },
+                    {
+                      "key": "password",
+                      "value": "<string>",
+                      "disabled": false,
+                      "type": "default",
+                      "description": "(Required) "
+                    },
+                    {
+                      "key": "grant_type",
+                      "value": "<string>",
+                      "disabled": false,
+                      "type": "default",
+                      "description": ""
+                    },
+                    {
+                      "key": "scope",
+                      "value": "",
+                      "disabled": false,
+                      "type": "default",
+                      "description": ""
+                    },
+                    {
+                      "key": "client_id",
+                      "value": "<string>",
+                      "disabled": false,
+                      "type": "default",
+                      "description": ""
+                    },
+                    {
+                      "key": "client_secret",
+                      "value": "<string>",
+                      "disabled": false,
+                      "type": "default",
+                      "description": ""
+                    }
+                  ]
+                }
+              },
+              "status": "Unprocessable Entity (WebDAV) (RFC 4918)",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "name": "Content-Type",
+                  "description": "",
+                  "type": "text"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [\n        \"<string>\",\n        \"<string>\"\n      ],\n      \"msg\": \"<string>\",\n      \"type\": \"<string>\"\n    },\n    {\n      \"loc\": [\n        \"<string>\",\n        \"<string>\"\n      ],\n      \"msg\": \"<string>\",\n      \"type\": \"<string>\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.data.kemdikbud.go.id/svc/satu-data/pendidikan/v3",
+      "type": "default"
+    },
+    {
+      "key": "base_url_login",
+      "value": "https://api.data.kemdikbud.go.id/svc/satu-data/auth/v1",
+      "type": "default"
+    },
+    {
+      "key": "username",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "api-key",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "default"
+    }
+  ]
+}
