@@ -6,3 +6,5 @@ __pycache__/
 *.egg-info/
 .superpowers/
 .worktrees/
+
+query_data/changelogformat.md
