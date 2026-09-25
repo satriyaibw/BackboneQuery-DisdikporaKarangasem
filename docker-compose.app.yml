@@ -1,0 +1,44 @@
+# Stack lokal best practice untuk --run-once (tanpa Prefect Server).
+# File ini SENGAJA terpisah dari docker-compose.yml (Prefect Server + metadata UI :4200)
+# agar `docker compose up` default tidak berubah perilakunya.
+#
+#   docker compose -f docker-compose.app.yml up -d db-target
+#   docker compose -f docker-compose.app.yml build backbone-client
+#   docker compose -f docker-compose.app.yml run --rm backbone-client --run-once
+
+services:
+  db-target:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: backbone
+      POSTGRES_PASSWORD: dhmiXQa9ztBgfCRnLscA
+      POSTGRES_DB: backbone_client
+    volumes:
+      - pgdata-target:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U backbone -d backbone_client"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    # 5433 di host -> 5432 di container (hindari clash bila ada postgres lokal di 5432)
+    ports:
+      - "127.0.0.1:5433:5432"
+
+  backbone-client:
+    build: .
+    image: backbone-client:latest
+    # Best practice: secret via env_file (.env, gitignored), BUKAN ENV baked di image
+    env_file:
+      - .env
+    depends_on:
+      db-target:
+        condition: service_healthy
+    # Satu jalan lalu exit — cocok untuk verifikasi lokal
+    command: ["--run-once"]
+    restart: "no"
+    init: true
+
+volumes:
+  pgdata-target:

@@ -1,0 +1,19 @@
+# Override SERVER (ETL terjadwal --loop + batas RAM 8 GB).
+# Dipakai HANYA di server kantor, digabung via -f ketiga:
+#
+#   docker compose -f docker-compose.app.yml -f docker-compose.loop.yml up -d backbone-client
+#
+# Dev lokal TIDAK memakai file ini (tetap --run-once dari docker-compose.app.yml).
+# JANGAN edit main.py untuk mengganti mode — override command di sinilah caranya (§D1 masterplan).
+
+services:
+  db-target:
+    mem_limit: 1g
+    restart: unless-stopped
+
+  backbone-client:
+    # --loop: hitung jadwal sendiri dari GET /user-info/schedule (tanggal [4]),
+    # tanpa Prefect Server. idle ringan hingga jadwal tiba.
+    command: ["--loop"]
+    restart: unless-stopped
+    mem_limit: 2g

@@ -1,4 +1,5 @@
 .env
+.env.web
 .venv/
 __pycache__/
 *.pyc
@@ -6,5 +7,9 @@ __pycache__/
 *.egg-info/
 .superpowers/
 .worktrees/
+
+# Dump / ekspor lokal (jangan komit; query_data/ tidak terpengaruh)
+/*.dump
+/backups/
 
 query_data/changelogformat.md

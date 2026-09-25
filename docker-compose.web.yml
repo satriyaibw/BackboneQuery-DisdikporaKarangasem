@@ -1,0 +1,62 @@
+# Web layer dev (digabung dengan docker-compose.app.yml via -f ganda).
+# Hanya aktif bila dipanggil dengan `--profile web`, sehingga `up` default
+# (ETL --run-once) tidak berubah perilakunya.
+#
+#   docker compose -f docker-compose.app.yml -f docker-compose.web.yml --profile web up -d sqlpad quick-tunnel
+#   docker compose -f docker-compose.app.yml -f docker-compose.web.yml logs -f quick-tunnel
+#
+# Prod (server kantor): JANGAN pakai quick-tunnel — ganti ke service `cloudflared`
+# named dengan token (profile `tunnel`, lihat DEPLOY-SERVER.md Fase E).
+
+services:
+  sqlpad:
+    image: sqlpad/sqlpad:latest
+    # .env.web menyediakan SQLPAD_ADMIN / SQLPAD_ADMIN_PASSWORD (admin awal)
+    # + ANALIS_DB_PASSWORD (dipakai init_analis.sql & form koneksi, diabaikan SQLPad).
+    env_file:
+      - .env.web
+    environment:
+      SQLPAD_PORT: "3000"
+    depends_on:
+      db-target:
+        condition: service_healthy
+    ports:
+      # Bind loopback saja — publikasi ke internet HANYA via tunnel, bukan port langsung.
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - sqlpad-data:/etc/sqlpad
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/app').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    mem_limit: 512m
+    profiles: ["web"]
+
+  # Tunnel SEMENTARA untuk dev (URL acak *.trycloudflare.com, berubah tiap restart).
+  quick-tunnel:
+    image: cloudflare/cloudflared:latest
+    command: ["tunnel", "--no-autoupdate", "--url", "http://sqlpad:3000"]
+    depends_on:
+      sqlpad:
+        condition: service_healthy
+    restart: "no"
+    mem_limit: 128m
+    profiles: ["web"]
+
+  # Tunnel PERMANEN untuk prod — aktifkan HANYA di server (profile `tunnel`),
+  # JANGAN bersamaan dengan quick-tunnel. Token hanya di .env.web (600).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN:-}"]
+    depends_on:
+      sqlpad:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 128m
+    profiles: ["tunnel"]
+
+volumes:
+  sqlpad-data:
