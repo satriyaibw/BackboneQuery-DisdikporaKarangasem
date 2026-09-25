@@ -10,7 +10,7 @@
 
 services:
   sqlpad:
-    image: sqlpad/sqlpad:latest
+    image: sqlpad/sqlpad@sha256:6011bd93d61711686ec7cdc91e5f7306a8185c27392bfbd457285ef19ff745a9
     # .env.web menyediakan SQLPAD_ADMIN / SQLPAD_ADMIN_PASSWORD (admin awal)
     # + ANALIS_DB_PASSWORD (dipakai init_analis.sql & form koneksi, diabaikan SQLPad).
     env_file:
@@ -24,7 +24,9 @@ services:
       # Bind loopback saja — publikasi ke internet HANYA via tunnel, bukan port langsung.
       - "127.0.0.1:3000:3000"
     volumes:
-      - sqlpad-data:/etc/sqlpad
+      # Data SQLPad (user, koneksi, riwayat query) — path resmi sesuai log
+      # "Loading seed data from /var/lib/sqlpad" (v7.5.7, terverifikasi).
+      - sqlpad-data:/var/lib/sqlpad
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/app').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
       interval: 10s
@@ -37,7 +39,7 @@ services:
 
   # Tunnel SEMENTARA untuk dev (URL acak *.trycloudflare.com, berubah tiap restart).
   quick-tunnel:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
     command: ["tunnel", "--no-autoupdate", "--url", "http://sqlpad:3000"]
     depends_on:
       sqlpad:
@@ -49,7 +51,7 @@ services:
   # Tunnel PERMANEN untuk prod — aktifkan HANYA di server (profile `tunnel`),
   # JANGAN bersamaan dengan quick-tunnel. Token hanya di .env.web (600).
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
     command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN:-}"]
     depends_on:
       sqlpad:

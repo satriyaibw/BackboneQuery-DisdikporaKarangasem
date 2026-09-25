@@ -145,12 +145,18 @@ bukan bug. Pull penuh hanya sukses tiap tanggal 4.
 
 ### 4.1 `docker-compose.web.yml` (BARU)
 
-- Service `sqlpad`: `image: sqlpad/sqlpad:latest`, `env_file: [.env.web]`,
+- Service `sqlpad`: `image: sqlpad/sqlpad@sha256:6011bd93d61711686ec7cdc91e5f7306a8185c27392bfbd457285ef19ff745a9`
+  (pin digest, image ~670 MB — lebih besar dari estimasi awal, tetap aman untuk RAM 8 GB),
+  `env_file: [.env.web]` (`SQLPAD_ADMIN`/`SQLPAD_ADMIN_PASSWORD` → admin awal otomatis;
+  registrasi pertama via UI signup sesuai pesan log "visit signup to complete registration"),
   `depends_on: db-target (healthy)`, `ports: ["127.0.0.1:3000:3000"]`,
-  `volumes: [sqlpad-data:/etc/sqlpad]`, `mem_limit: 512M`, `restart: unless-stopped`,
+  `volumes: [sqlpad-data:/var/lib/sqlpad]` (path resmi v7.5.7, terverifikasi dari log
+  "Loading seed data from /var/lib/sqlpad" — BUKAN /etc/sqlpad),
+  `mem_limit: 512M`, `restart: unless-stopped`,
   `profiles: [web]`. Koneksi DB di dalam SQLPad menunjuk host `db-target:5432`
   dengan user `analis` (bukan `backbone`).
-- Service `quick-tunnel`: `image: cloudflare/cloudflared:latest`,
+- Service `quick-tunnel`: `image: cloudflare/cloudflared@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c`
+  (pin digest),
   `command: ["tunnel","--no-autoupdate","--url","http://sqlpad:3000"]`,
   `depends_on: [sqlpad]`, tanpa secret, `profiles: [web]`, log URL ke stdout.
 - Service `cloudflared` (prod, profil `tunnel`, JANGAN aktif bersamaan dengan
