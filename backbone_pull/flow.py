@@ -422,10 +422,12 @@ async def pull_ref_bulk(tbl_ref: Dict[str, dict],
 
 
 @task(name="backbone-retry-failed", log_prints=True)
-async def retry_failed(tables: Dict[str, dict]) -> Dict[str, int]:
+async def retry_failed(tables: Dict[str, dict], only_tables: Optional[List[str]] = None) -> Dict[str, int]:
     logger = get_run_logger()
     recovered_rows: Dict[str, int] = {}
     failures = db.list_failures()
+    if only_tables:
+        failures = [f for f in failures if f["tbl_name"] in only_tables]
     if not failures:
         return recovered_rows
     logger.info(f"Retry {len(failures)} item gagal (full pull, tanpa filter incremental)...")
@@ -515,9 +517,15 @@ async def backbone_client_pull(only_tables: Optional[List[str]] = None):
             run_stats.append(await pull_ref(tbl_name, meta, batch_id, request_id))
 
     
-    recovered_rows = await retry_failed(tables)
+    recovered_rows = await retry_failed(tables, only_tables)
+    # Saat --tables aktif, failure tabel LAIN (di luar yang diminta, sisa dari
+    # run sebelumnya) sengaja tidak ikut dihitung/di-retry di sini -- run
+    # ad-hoc ini tidak boleh gagal (assert_complete) gara-gara sesuatu yang
+    # tidak diminta, dan tidak boleh diam-diam ikut retry tabel lain juga.
+    relevant_failures = [f for f in db.list_failures()
+                        if not only_tables or f["tbl_name"] in only_tables]
     remaining_by_table: Dict[str, int] = {}
-    for f in db.list_failures():
+    for f in relevant_failures:
         remaining_by_table[f["tbl_name"]] = remaining_by_table.get(f["tbl_name"], 0) + 1
     for stat in run_stats:
         tbl = stat["tbl_name"]
@@ -526,8 +534,7 @@ async def backbone_client_pull(only_tables: Optional[List[str]] = None):
         db.update_pull_log(tbl, stat["param_type"], stat["run_started_at"],
                            final_received, final_failed)
 
-    n_failures = db.count_failures()
-    assert_complete(n_failures)
+    assert_complete(len(relevant_failures))
     logger.info(f"✓ Selesai — 100% lengkap — {datetime.now():%Y-%m-%d %H:%M}")
 
 
