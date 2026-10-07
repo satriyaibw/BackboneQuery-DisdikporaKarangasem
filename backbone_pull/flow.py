@@ -20,7 +20,7 @@ from .ref_bulk import (
     parse_referensi_zip,
 )
 from .request_info import pick_active_request
-from .routing import route_tables
+from .routing import filter_tables, route_tables
 from .throttle import RateLimiter
 
 settings = load_settings()
@@ -228,7 +228,7 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict,
 
     npsn_list = list(dict.fromkeys(npsn_list + collected))
     if total:
-        db.set_last_update("sekolah", datetime.now())
+        db.set_last_update("sekolah", started_at)
         db.add_checkpoint_count("sekolah", total)
     db.log_pull_summary("sekolah", "wilayah", started_at, datetime.now(),
                         total, len(kode_wilayah_list), failed,
@@ -273,7 +273,7 @@ async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict,
                                                 res.reason, res.detail, res.expected, res.received)
         await asyncio.gather(*[_one(n) for n in effective_npsn_list])
     if total:
-        db.set_last_update(tbl_name, datetime.now())
+        db.set_last_update(tbl_name, started_at)
         db.add_checkpoint_count(tbl_name, total)
     db.log_pull_summary(tbl_name, "npsn", started_at, datetime.now(),
                         total, len(effective_npsn_list), failed,
@@ -317,7 +317,7 @@ async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dic
                                                 res.reason, res.detail, res.expected, res.received)
         await asyncio.gather(*[_one(k) for k in kode_wilayah_list])
     if total:
-        db.set_last_update(ckpt, datetime.now())
+        db.set_last_update(ckpt, started_at)
         db.add_checkpoint_count(ckpt, total)
     db.log_pull_summary(tbl_name, "wilayah", started_at, datetime.now(),
                         total, len(kode_wilayah_list), failed,
@@ -345,7 +345,7 @@ async def pull_ref(tbl_name: str, meta: dict,
         db.record_failure(tbl_name, "ref", "", res.reason,
                           res.detail, res.expected, res.received)
     if res.received:
-        db.set_last_update(tbl_name, datetime.now())
+        db.set_last_update(tbl_name, started_at)
         db.add_checkpoint_count(tbl_name, res.received)
     db.log_pull_summary(tbl_name, "ref", started_at, datetime.now(),
                         res.received, 1, 0 if res.ok else 1,
@@ -407,7 +407,7 @@ async def pull_ref_bulk(tbl_ref: Dict[str, dict],
         finished_at = datetime.now()
         db.clear_failure(tbl_name, "ref", "")
         if total:
-            db.set_last_update(tbl_name, finished_at)
+            db.set_last_update(tbl_name, started_at)
             db.add_checkpoint_count(tbl_name, total)
         db.log_pull_summary(tbl_name, "ref", started_at, finished_at, total, 1, 0,
                             batch_id, request_id)
@@ -423,10 +423,12 @@ async def pull_ref_bulk(tbl_ref: Dict[str, dict],
 
 
 @task(name="backbone-retry-failed", log_prints=True)
-async def retry_failed(tables: Dict[str, dict]) -> Dict[str, int]:
+async def retry_failed(tables: Dict[str, dict], only_tables: Optional[List[str]] = None) -> Dict[str, int]:
     logger = get_run_logger()
     recovered_rows: Dict[str, int] = {}
     failures = db.list_failures()
+    if only_tables:
+        failures = [f for f in failures if f["tbl_name"] in only_tables]
     if not failures:
         return recovered_rows
     logger.info(f"Retry {len(failures)} item gagal (full pull, tanpa filter incremental)...")
@@ -459,9 +461,11 @@ async def retry_failed(tables: Dict[str, dict]) -> Dict[str, int]:
 
 
 @flow(name="backbone-client-pull", log_prints=True)
-async def backbone_client_pull():
+async def backbone_client_pull(only_tables: Optional[List[str]] = None):
     logger = get_run_logger()
     logger.info(f"▶ Mulai penarikan data Backbone — {datetime.now():%Y-%m-%d %H:%M}")
+    if only_tables:
+        logger.info(f"--tables aktif, hanya menarik: {only_tables}")
     batch_id = str(uuid.uuid4())
     prepare_infrastructure()
     tables, request_id = await _authenticate_and_get_metadata()
@@ -481,6 +485,7 @@ async def backbone_client_pull():
                                                   batch_id, request_id)
     run_stats: List[dict] = [sekolah_stats]
     tbl_npsn, tbl_wilayah, tbl_ref = route_tables(tables)
+    tbl_npsn, tbl_wilayah, tbl_ref = filter_tables(tbl_npsn, tbl_wilayah, tbl_ref, only_tables)
     if npsn_list:
         for tbl_name, meta in tbl_npsn.items():
             logger.info(f"Tarik (npsn) → [{meta['schema_name']}].[{tbl_name}]")
@@ -513,9 +518,15 @@ async def backbone_client_pull():
             run_stats.append(await pull_ref(tbl_name, meta, batch_id, request_id))
 
     
-    recovered_rows = await retry_failed(tables)
+    recovered_rows = await retry_failed(tables, only_tables)
+    # Saat --tables aktif, failure tabel LAIN (di luar yang diminta, sisa dari
+    # run sebelumnya) sengaja tidak ikut dihitung/di-retry di sini -- run
+    # ad-hoc ini tidak boleh gagal (assert_complete) gara-gara sesuatu yang
+    # tidak diminta, dan tidak boleh diam-diam ikut retry tabel lain juga.
+    relevant_failures = [f for f in db.list_failures()
+                        if not only_tables or f["tbl_name"] in only_tables]
     remaining_by_table: Dict[str, int] = {}
-    for f in db.list_failures():
+    for f in relevant_failures:
         remaining_by_table[f["tbl_name"]] = remaining_by_table.get(f["tbl_name"], 0) + 1
     for stat in run_stats:
         tbl = stat["tbl_name"]
@@ -524,8 +535,7 @@ async def backbone_client_pull():
         db.update_pull_log(tbl, stat["param_type"], stat["run_started_at"],
                            final_received, final_failed)
 
-    n_failures = db.count_failures()
-    assert_complete(n_failures)
+    assert_complete(len(relevant_failures))
     logger.info(f"✓ Selesai — 100% lengkap — {datetime.now():%Y-%m-%d %H:%M}")
 
 
