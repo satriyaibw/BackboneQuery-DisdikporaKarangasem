@@ -47,6 +47,8 @@ Database tujuan dipilih lewat `DB_DIALECT` (`sqlserver`, `postgres`, atau `mysql
     powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
     ```
 
+  > **Catatan:** Jika instalasi dilakukan via Docker (`docker compose`), `uv` tidak diperlukan di sistem host karena semua berjalan dalam container. `uv` hanya dibutuhkan untuk menjalankan dari source code tanpa Docker.
+
 - Akses ke database tujuan (SQL Server, PostgreSQL, **atau** MySQL 8.0+) dengan user yang punya hak baca/tulis pada database target (lihat §8 soal hak `CREATE DATABASE`).
 - Kredensial akun Backbone API: **username**, **password**, dan **API key** (didapat dari pengelola Backbone/Kemendikdasmen — bukan bagian dari proyek ini). Access-token (JWT) diambil **otomatis** dari username/password di tiap run, jadi tidak perlu menyiapkan atau menempel JWT manual.
 
@@ -407,3 +409,5 @@ ORDER BY last_used_at DESC;
 
 - `raw_info` adalah salinan mentah (JSON) seluruh field yang dikembalikan Backbone untuk sesi itu — apa adanya dari API, tidak diasumsikan field tertentu di luar `request_id`/`expired_date`.
 - `last_used_at` ter-update tiap kali sesi itu dipakai lagi di run berikutnya (selama belum `expired_date`) — jadi baris ini juga menunjukkan kapan terakhir kali sesi itu masih dipakai.
+
+> **Catatan perbaikan:** Mulai versi ini, checkpoint `last_update` menggunakan `started_at` (waktu mulai penarikan) bukan `datetime.now()` (waktu selesai). Ini memastikan konsistensi dengan `run_started_at` di `sync.pull_log` dan mencegah kehilangan data saat pull terhenti di tengah jalan.
