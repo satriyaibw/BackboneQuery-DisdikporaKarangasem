@@ -31,7 +31,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--retry-failed", action="store_true",
                    help="Jalankan HANYA retry item yang tersisa di sync.pull_failures "
                         "(cepat, tanpa pass utama semua NPSN/wilayah/tabel), lalu keluar.")
+    p.add_argument("--tables", type=str, default=None,
+                   help="Hanya tarik tabel tertentu (nama tbl_name, pisah koma, mis. "
+                        "'guru,ats'), bukan semua tabel. Hanya berlaku bareng --run-once; "
+                        "'sekolah' (+ npsn list-nya) tetap selalu ditarik sebagai prasyarat.")
     return p
+
+
+def parse_tables_arg(raw):
+    """Pisah nilai --tables (string "guru,ats" dipisah koma) jadi list nama
+    tabel, trim spasi, abaikan segmen kosong. None/'' -> None (tidak membatasi)."""
+    if not raw:
+        return None
+    tables = [t.strip() for t in raw.split(",") if t.strip()]
+    return tables or None
 
 
 async def _resolve_cron(s) -> str:
@@ -110,18 +123,24 @@ def main():
     args = build_parser().parse_args()
     s = load_settings()
 
+    only_tables = parse_tables_arg(args.tables)
+
     if args.retry_failed:
         asyncio.run(retry_failed_only())
         return
 
     if args.run_once:
         try:
-            asyncio.run(backbone_client_pull())
+            asyncio.run(backbone_client_pull(only_tables=only_tables))
         except Exception as e:  # noqa: BLE001
             print(f"[!] Run utama masih menyisakan failure ({e}) — coba retry-only "
                   "sekali lagi...", flush=True)
             asyncio.run(retry_failed_only())
         return
+
+    if only_tables:
+        print("[!] --tables hanya berlaku bareng --run-once — diabaikan di mode ini.",
+              flush=True)
 
     if args.loop:
         run_loop(s)

@@ -20,7 +20,7 @@ from .ref_bulk import (
     parse_referensi_zip,
 )
 from .request_info import pick_active_request
-from .routing import route_tables
+from .routing import filter_tables, route_tables
 from .throttle import RateLimiter
 
 settings = load_settings()
@@ -458,9 +458,11 @@ async def retry_failed(tables: Dict[str, dict]) -> Dict[str, int]:
 
 
 @flow(name="backbone-client-pull", log_prints=True)
-async def backbone_client_pull():
+async def backbone_client_pull(only_tables: Optional[List[str]] = None):
     logger = get_run_logger()
     logger.info(f"▶ Mulai penarikan data Backbone — {datetime.now():%Y-%m-%d %H:%M}")
+    if only_tables:
+        logger.info(f"--tables aktif, hanya menarik: {only_tables}")
     batch_id = str(uuid.uuid4())
     prepare_infrastructure()
     tables, request_id = await _authenticate_and_get_metadata()
@@ -480,6 +482,7 @@ async def backbone_client_pull():
                                                   batch_id, request_id)
     run_stats: List[dict] = [sekolah_stats]
     tbl_npsn, tbl_wilayah, tbl_ref = route_tables(tables)
+    tbl_npsn, tbl_wilayah, tbl_ref = filter_tables(tbl_npsn, tbl_wilayah, tbl_ref, only_tables)
     if npsn_list:
         for tbl_name, meta in tbl_npsn.items():
             logger.info(f"Tarik (npsn) → [{meta['schema_name']}].[{tbl_name}]")
