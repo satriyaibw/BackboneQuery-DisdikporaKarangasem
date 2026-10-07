@@ -227,7 +227,7 @@ async def pull_sekolah(kode_wilayah_list: List[str], meta: dict,
 
     npsn_list = list(dict.fromkeys(npsn_list + collected))
     if total:
-        db.set_last_update("sekolah", datetime.now())
+        db.set_last_update("sekolah", started_at)
         db.add_checkpoint_count("sekolah", total)
     db.log_pull_summary("sekolah", "wilayah", started_at, datetime.now(),
                         total, len(kode_wilayah_list), failed,
@@ -272,7 +272,7 @@ async def pull_by_npsn(tbl_name: str, npsn_list: List[str], meta: dict,
                                                 res.reason, res.detail, res.expected, res.received)
         await asyncio.gather(*[_one(n) for n in effective_npsn_list])
     if total:
-        db.set_last_update(tbl_name, datetime.now())
+        db.set_last_update(tbl_name, started_at)
         db.add_checkpoint_count(tbl_name, total)
     db.log_pull_summary(tbl_name, "npsn", started_at, datetime.now(),
                         total, len(effective_npsn_list), failed,
@@ -316,7 +316,7 @@ async def pull_by_wilayah(tbl_name: str, kode_wilayah_list: List[str], meta: dic
                                                 res.reason, res.detail, res.expected, res.received)
         await asyncio.gather(*[_one(k) for k in kode_wilayah_list])
     if total:
-        db.set_last_update(ckpt, datetime.now())
+        db.set_last_update(ckpt, started_at)
         db.add_checkpoint_count(ckpt, total)
     db.log_pull_summary(tbl_name, "wilayah", started_at, datetime.now(),
                         total, len(kode_wilayah_list), failed,
@@ -344,7 +344,7 @@ async def pull_ref(tbl_name: str, meta: dict,
         db.record_failure(tbl_name, "ref", "", res.reason,
                           res.detail, res.expected, res.received)
     if res.received:
-        db.set_last_update(tbl_name, datetime.now())
+        db.set_last_update(tbl_name, started_at)
         db.add_checkpoint_count(tbl_name, res.received)
     db.log_pull_summary(tbl_name, "ref", started_at, datetime.now(),
                         res.received, 1, 0 if res.ok else 1,
@@ -406,7 +406,7 @@ async def pull_ref_bulk(tbl_ref: Dict[str, dict],
         finished_at = datetime.now()
         db.clear_failure(tbl_name, "ref", "")
         if total:
-            db.set_last_update(tbl_name, finished_at)
+            db.set_last_update(tbl_name, started_at)
             db.add_checkpoint_count(tbl_name, total)
         db.log_pull_summary(tbl_name, "ref", started_at, finished_at, total, 1, 0,
                             batch_id, request_id)
