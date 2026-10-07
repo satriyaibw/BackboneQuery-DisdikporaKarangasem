@@ -27,7 +27,8 @@ settings = load_settings()
 rate_limiter = RateLimiter(settings.backbone_rate_limit)
 api = BackboneAPI(settings.backbone_base_url, settings.backbone_api_key,
                   settings.backbone_auth_url, settings.backbone_username,
-                  settings.backbone_password, rate_limiter=rate_limiter)
+                  settings.backbone_password, rate_limiter=rate_limiter,
+                  access_token=settings.backbone_access_token)
 db = get_adapter(settings)
 PER_PAGE = settings.backbone_per_page
 CONCURRENCY = settings.backbone_concurrency

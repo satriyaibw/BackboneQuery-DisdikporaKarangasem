@@ -12,18 +12,25 @@ class BackboneAPI:
     """
 
     def __init__(self, base_url: str, api_key: str, auth_url: str,
-                 username: str, password: str, rate_limiter=None):
+                 username: str, password: str, rate_limiter=None,
+                 access_token: Optional[str] = None):
         self.base_url = base_url.rstrip("/")
         self.auth_url = auth_url
         self.username = username
         self.password = password
         self.rate_limiter = rate_limiter
+        self.access_token = access_token
         self.base_headers = {"X-API-Key": api_key, "Accept": "application/json"}
         # Belum ada Authorization sampai fetch_token() dipanggil.
         self.headers = dict(self.base_headers)
 
     async def fetch_token(self, session: aiohttp.ClientSession) -> str:
-        """Tukar username/password → access-token, lalu set header Bearer."""
+        """Tukar username/password → access-token, lalu set header Bearer.
+        Bila BACKBONE_ACCESS_TOKEN sudah disediakan (override sementara),
+        pakai token itu langsung tanpa menukar ulang."""
+        if self.access_token:
+            self.headers = {**self.base_headers, "Authorization": f"Bearer {self.access_token}"}
+            return self.access_token
         form = {"username": self.username, "password": self.password}
         headers = {"accept": "application/json",
                    "content-type": "application/x-www-form-urlencoded"}

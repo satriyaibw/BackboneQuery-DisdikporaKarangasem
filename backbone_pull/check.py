@@ -58,7 +58,8 @@ def main():
         _fail("Koneksi database", e)
 
     api = BackboneAPI(s.backbone_base_url, s.backbone_api_key, s.backbone_auth_url,
-                      s.backbone_username, s.backbone_password)
+                      s.backbone_username, s.backbone_password,
+                      access_token=s.backbone_access_token)
     api_ok = asyncio.run(_check_api(api))
 
     print("=== Ringkasan ===")

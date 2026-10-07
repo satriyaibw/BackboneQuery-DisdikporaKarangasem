@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=Path(".") / ".env")
@@ -68,6 +69,7 @@ class Settings:
     pull_ref: bool
     pull_ref_use_bulk_zip: bool
     pull_log_retention_days: int
+    backbone_access_token: Optional[str] = None
 
 
 def load_settings() -> Settings:
@@ -109,6 +111,7 @@ def load_settings() -> Settings:
         backbone_api_key=required["BACKBONE_API_KEY"],
         backbone_username=required["BACKBONE_USERNAME"],
         backbone_password=required["BACKBONE_PASSWORD"],
+        backbone_access_token=os.getenv("BACKBONE_ACCESS_TOKEN") or None,
         backbone_per_page=_int("BACKBONE_PER_PAGE", 500),
         backbone_rate_limit=_float("BACKBONE_RATE_LIMIT", 20),
         backbone_concurrency=_int("BACKBONE_CONCURRENCY", 16),
